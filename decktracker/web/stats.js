@@ -333,7 +333,7 @@ function renderKpis(s) {
       `best ${s.streaks.best_win} W · worst ${s.streaks.worst_loss} L`),
     kpi("Going first", fmtPct(s.first.winrate), `${wl(s.first)} in ${s.first.games}`),
     kpi("On the coin", fmtPct(s.coin.winrate), `${wl(s.coin)} in ${s.coin.games}`),
-    kpi("Avg game", s.avg_turns === null ? "–" : `${s.avg_turns} turns`, s.avg_minutes === null ? "" : `${s.avg_minutes} min`),
+    kpi("Avg turns", s.avg_turns === null ? "–" : s.avg_turns, s.avg_minutes === null ? "" : `${s.avg_minutes} min per game`),
   );
 }
 

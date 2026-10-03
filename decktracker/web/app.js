@@ -38,8 +38,8 @@ function ratingBadge(rating) {
   return el("span", { class: `rating t-${slug}`, title: rating.tier }, rating.score);
 }
 
-function cardRow(card, { count, chance, gone, tag, rating } = {}) {
-  const row = el("li", {
+function cardRow(card, { count, chance, gone, tag, rating, element = "li" } = {}) {
+  const row = el(element, {
     class: `card ${card.rarity || ""} ${gone ? "gone" : ""} ${rating !== undefined ? "has-rating" : ""}`,
     style: `--tile: url('${ART}/tiles/${encodeURIComponent(card.id)}.png')`,
     "data-card": card.id,
@@ -163,13 +163,13 @@ function renderOpponent(s) {
   );
 
   if (!s.opponent.seen.length) seen.append(el("li", { class: "empty" }, "Nothing revealed yet."));
-  for (const r of s.opponent.seen) seen.append(cardRow(r.card, { count: r.total > 1 ? `×${r.total}` : "" }));
+  for (const r of s.opponent.seen) seen.append(cardRow(r.card, { count: r.total > 1 ? `×${r.total}` : undefined }));
 
   if (!s.opponent.played.length) played.append(el("li", { class: "empty" }, "Nothing played yet."));
   for (const p of [...s.opponent.played].reverse()) {
     played.append(el("li", {},
       el("span", { class: "turn" }, `Turn ${p.turn}`),
-      cardRow(p.card, { tag: p.created ? "generated" : null }),
+      cardRow(p.card, { tag: p.created ? "generated" : null, element: "div" }),
     ));
   }
 }
@@ -226,6 +226,8 @@ function render(s) {
 // --- wiring -------------------------------------------------------------------
 
 function connect() {
+  // Render the current state right away; the event stream then keeps it live.
+  fetch("/api/state").then((res) => res.json()).then((s) => { if (!state) render(s); }).catch(() => {});
   const events = new EventSource("/api/events");
   events.onmessage = (e) => render(JSON.parse(e.data));
   events.onerror = () => {

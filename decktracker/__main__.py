@@ -87,18 +87,29 @@ def cmd_run(args) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="decktracker", description="Hearthstone deck tracker for Linux/Proton")
-    parser.add_argument("--hs-dir", help="Hearthstone install directory (auto-detected by default)")
-    parser.add_argument("-v", "--verbose", action="store_true")
-    sub = parser.add_subparsers(dest="command")
+    # Options work before or after the subcommand; subcommands don't override
+    # values given at the top level, hence SUPPRESS defaults there.
+    def common(p: argparse.ArgumentParser, top: bool) -> None:
+        d = (lambda v: v) if top else (lambda v: argparse.SUPPRESS)
+        p.add_argument("--hs-dir", default=d(None), help="Hearthstone install directory (auto-detected by default)")
+        p.add_argument("-v", "--verbose", action="store_true", default=d(False), help="debug logging")
 
+    def run_options(p: argparse.ArgumentParser, top: bool) -> None:
+        d = (lambda v: v) if top else (lambda v: argparse.SUPPRESS)
+        p.add_argument("--host", default=d("127.0.0.1"), help="bind address (0.0.0.0 to view from other devices)")
+        p.add_argument("--port", type=int, default=d(8765), help="port of the web page (default 8765)")
+        p.add_argument("--locale", default=d("auto"), help="card language, e.g. enUS or deDE (default: game's)")
+        p.add_argument("--db", default=d(None), help="history database path")
+        p.add_argument("--open", action="store_true", default=d(False), help="open the page in the default browser")
+
+    common(parser, True)
+    run_options(parser, True)
+    sub = parser.add_subparsers(dest="command")
     run = sub.add_parser("run", help="start the tracker (default)")
-    sub.add_parser("setup", help="enable the Hearthstone logs the tracker needs")
-    for p in (parser, run):
-        p.add_argument("--host", default="127.0.0.1", help="bind address (0.0.0.0 to view from other devices)")
-        p.add_argument("--port", type=int, default=8765)
-        p.add_argument("--locale", default="auto", help="card language, e.g. enUS or deDE (default: game's)")
-        p.add_argument("--db", default=None, help="history database path")
-        p.add_argument("--open", action="store_true", help="open the page in the default browser")
+    common(run, False)
+    run_options(run, False)
+    setup = sub.add_parser("setup", help="enable the Hearthstone logs the tracker needs")
+    common(setup, False)
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
