@@ -98,6 +98,7 @@ Closing the window keeps the tracker running in the tray; quit it from the tray 
 | **Always on top** | Keep the window above the game. Applies when the app next starts; on KDE you can also right-click the title bar → *More Actions* → *Keep Above Others*. |
 | **Start at login** | Start the tray icon when you log in |
 
+The last three are also in the window's **Settings** menu, which is the only place for them if your desktop has no system tray.
 These choices are saved in `~/.config/decktracker/settings.json`.
 
 ### Browser version
@@ -142,7 +143,7 @@ The tracker rebuilds the game state from these logs, saves each finished game to
 
 Hearthstone doesn't write the three cards you're offered during an Arena draft to any log file.
 To show them automatically, the tracker can read them from the game's memory while you draft, about twice a second.
-Turn on **Read draft offers** in the tray menu, or start the browser version with `./decktracker.sh --read-memory`.
+Turn on **Read draft offers** in the app's Settings menu or the tray menu, or start the browser version with `./decktracker.sh --read-memory`.
 
 - **Read-only.** The tracker opens `/proc/<pid>/mem` for reading. It never writes to the game, sends inputs or changes anything.
 - **What it reads:** the draft screen's current offer, plus your Arena deck with exact copy counts. This also makes Arena deck tracking exact during games.

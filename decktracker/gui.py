@@ -95,6 +95,7 @@ def run(show_window: bool, hs_dir: str | None = None) -> int:
 
     try:
         tracker = build_app(hs_dir, read_memory=settings.read_memory)
+        tracker.desktop = True
         port = free_port(settings.port)
         server = serve(tracker, "127.0.0.1", port)
     except SystemExit as exc:  # e.g. Hearthstone not found
@@ -169,6 +170,16 @@ def run(show_window: bool, hs_dir: str | None = None) -> int:
         action.toggled.connect(slot)
         return action
 
+    # Shared by the window's Settings menu and the tray menu, so both stay in sync.
+    actions = [
+        check("Read draft offers (game memory)", settings.read_memory, toggle_memory),
+        check("Always on top", settings.always_on_top, toggle_on_top),
+        check("Start at login", desktop.autostart_enabled(), desktop.set_autostart),
+    ]
+    settings_menu = window.menuBar().addMenu("&Settings")
+    for action in actions:
+        settings_menu.addAction(action)
+
     if QSystemTrayIcon.isSystemTrayAvailable():
         tray = QSystemTrayIcon(icon)
         menu = QMenu()
@@ -176,11 +187,6 @@ def run(show_window: bool, hs_dir: str | None = None) -> int:
         menu.addAction("Stats", lambda: window.show_view("history"))
         menu.addAction("Open in browser", lambda: webbrowser.open(url))
         menu.addSeparator()
-        actions = [
-            check("Read draft offers (game memory)", settings.read_memory, toggle_memory),
-            check("Always on top", settings.always_on_top, toggle_on_top),
-            check("Start at login", desktop.autostart_enabled(), desktop.set_autostart),
-        ]
         for action in actions:
             menu.addAction(action)
         menu.addSeparator()

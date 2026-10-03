@@ -227,7 +227,9 @@ function renderDraft(s) {
   const notes = [d.source
     ? "Ratings from HearthArena's tier list (heartharena.com), refreshed daily."
     : "Arena ratings unavailable — couldn't download HearthArena's tier list."];
-  if (!s.memory?.enabled) notes.push("Start the tracker with --read-memory to see the offered cards automatically.");
+  if (!s.memory?.enabled) notes.push(s.desktop
+    ? "Turn on Settings → Read draft offers (game memory) to see the offered cards automatically."
+    : "Start the tracker with --read-memory to see the offered cards automatically.");
   else if (s.memory.status !== "ok") notes.push(`Memory reading: ${s.memory.status}.`);
   $("draft-source").textContent = notes.join(" ");
   renderOffer(d.offer);

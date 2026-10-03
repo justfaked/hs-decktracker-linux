@@ -104,6 +104,7 @@ class MemoryToggleTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             app = App(Path(tmp), CARDS, History(":memory:"), memory_factory=factory)
             self.assertFalse(app.read_memory)
+            self.assertFalse(app.snapshot()["desktop"])  # the page's hint points to --read-memory
             app.set_read_memory(True)
             self.assertTrue(self.wait_for(lambda: app.tracker.memory_status == "ok"))
             app.set_read_memory(False)

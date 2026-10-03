@@ -36,6 +36,7 @@ class App:
         self.version = 0
         self.history_rev = 0
         self.session: Session | None = None
+        self.desktop = False  # inside the desktop app, which has the memory switch in its menus
         self.tracker = Tracker(cards, history, ratings=self.ratings)
         self._snapshot: tuple[int, dict] | None = None
         self._stop = threading.Event()
@@ -50,6 +51,7 @@ class App:
                 state["logs_dir"] = str(self.logs_dir)
                 state["watching"] = self.session is not None
                 state["locale"] = self.cards.locale
+                state["desktop"] = self.desktop
                 self._snapshot = (self.version, state)
             return self._snapshot[1]
 
