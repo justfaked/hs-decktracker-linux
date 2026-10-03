@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deck Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="status" id="status">
+      <span class="dot"></span>
+      <span id="status-text">Connecting…</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="live" role="tab">Live</button>
+      <button class="tab" data-view="history" role="tab">Stats</button>
+    </nav>
+  </header>
+
+  <main id="view-live" class="view">
+    <section class="panel" id="my-panel">
+      <div class="panel-head">
+        <div>
+          <h2 id="deck-name">My deck</h2>
+          <p class="sub" id="deck-sub">Waiting for a deck…</p>
+        </div>
+        <div class="big-count" id="deck-count" title="Cards left in deck"></div>
+      </div>
+      <ol class="cards" id="deck-list"></ol>
+      <p class="note" id="deck-note" hidden></p>
+      <details class="paste">
+        <summary>Use a deck code</summary>
+        <form id="deck-form">
+          <input id="deck-code" placeholder="Paste a deck code (AAE…)" autocomplete="off" spellcheck="false">
+          <button type="submit">Use</button>
+        </form>
+        <p class="sub" id="deck-form-msg"></p>
+      </details>
+    </section>
+
+    <section class="panel" id="draft-panel" hidden>
+      <div class="panel-head">
+        <div>
+          <h2 id="draft-title">Draft</h2>
+          <p class="sub" id="draft-sub"></p>
+        </div>
+        <div class="big-count" id="draft-avg" title="Average rating of your picks"></div>
+      </div>
+      <input id="rating-search" class="search" type="search" autocomplete="off" spellcheck="false"
+             placeholder="Type a card name to see its rating…">
+      <ol class="cards" id="rating-results"></ol>
+      <h3>Your picks</h3>
+      <ol class="cards" id="draft-picks"></ol>
+      <p class="note" id="draft-source"></p>
+    </section>
+
+    <section class="panel" id="opp-panel">
+      <div class="panel-head">
+        <div>
+          <h2 id="opp-name">Opponent</h2>
+          <p class="sub" id="opp-sub">No game in progress</p>
+        </div>
+        <div class="opp-counts" id="opp-counts"></div>
+      </div>
+      <h3>Seen from their deck</h3>
+      <ol class="cards" id="opp-seen"></ol>
+      <h3>Played</h3>
+      <ol class="timeline" id="opp-played"></ol>
+    </section>
+  </main>
+
+  <main id="view-history" class="view stats-view" hidden>
+    <form class="filters" id="filters">
+      <label>Period
+        <select name="days">
+          <option value="">All time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </label>
+      <label>Mode <select name="mode" id="filter-mode"></select></label>
+      <label>My class <select name="cls" id="filter-class"></select></label>
+    </form>
+
+    <section class="kpis" id="kpis"></section>
+
+    <section class="panel">
+      <div class="section-head">
+        <h3>Class matchups</h3>
+        <div class="legend" id="matrix-legend">
+          <span>0%</span><span class="ramp"></span><span>100%</span>
+          <span class="legend-note">Rows: your class · columns: opponent · muted: fewer than 3 games</span>
+        </div>
+      </div>
+      <div class="scroll-x"><table class="matrix" id="matrix"></table></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <h3>Games per day</h3>
+        <div class="legend">
+          <span class="key"><i class="swatch pos"></i>Wins</span>
+          <span class="key"><i class="swatch neg"></i>Losses</span>
+        </div>
+      </div>
+      <div class="chart" id="chart-daily"></div>
+      <h3>Win rate over time <span class="h-note">(cumulative)</span></h3>
+      <div class="chart" id="chart-winrate"></div>
+      <details class="table-view"><summary>Show as table</summary><table class="stats" id="daily-table"></table></details>
+    </section>
+
+    <div class="history-grid">
+      <section class="panel"><h3>By mode</h3><table class="stats" id="by-mode"></table></section>
+      <section class="panel"><h3>Against class</h3><table class="stats" id="by-opp"></table></section>
+      <section class="panel"><h3>As class</h3><table class="stats" id="by-mine"></table></section>
+      <section class="panel"><h3>Going first vs on the coin</h3><table class="stats" id="turn-order"></table></section>
+      <section class="panel"><h3>Game length (turns)</h3><table class="stats" id="by-length"></table></section>
+      <section class="panel"><h3>Time of day</h3><table class="stats" id="by-hour"></table>
+        <h3>Day of week</h3><table class="stats" id="by-weekday"></table></section>
+    </div>
+
+    <section class="panel" id="arena-section">
+      <h3>Arena runs</h3>
+      <div class="arena-grid">
+        <div>
+          <table class="stats" id="arena-classes"></table>
+          <h3>Runs by wins</h3>
+          <div class="chart" id="chart-runs"></div>
+        </div>
+        <div class="scroll-x"><table class="stats" id="arena-runs"></table></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <h3>My cards</h3>
+        <span class="h-note">Win rate in games where the card was drawn, in the opening hand (after mulligan), or played. Impact: drawn win rate minus overall.</span>
+      </div>
+      <div class="scroll-x"><table class="stats sortable" id="card-table"></table></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <h3>Opponent cards</h3>
+        <span class="h-note">Your record against opponents who showed each card.</span>
+      </div>
+      <div class="scroll-x"><table class="stats sortable" id="opp-card-table"></table></div>
+    </section>
+
+    <section class="panel">
+      <h3>Recent games</h3>
+      <div class="scroll-x"><table class="games" id="games"></table></div>
+    </section>
+  </main>
+
+  <div class="tooltip" id="tooltip" hidden></div>
+
+  <img id="card-preview" alt="" hidden>
+  <script src="app.js"></script>
+  <script src="stats.js"></script>
+</body>
+</html>
