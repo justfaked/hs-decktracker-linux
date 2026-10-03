@@ -10,6 +10,28 @@ It reads Hearthstone's own log files and shows your remaining deck, your opponen
 
 ![Live tracking during an Underground Arena game](docs/screenshots/live.jpg)
 
+## Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+  - [Desktop app](#desktop-app)
+  - [Updating and uninstalling](#updating-and-uninstalling)
+- [Usage](#usage)
+  - [Desktop app](#desktop-app-1)
+  - [Browser version](#browser-version)
+  - [Tips](#tips)
+- [How it works](#how-it-works)
+  - [Reading the draft offer from memory](#reading-the-draft-offer-from-memory)
+  - [Where data is stored](#where-data-is-stored)
+- [Limitations](#limitations)
+- [Troubleshooting](#troubleshooting)
+- [Reporting bugs](#reporting-bugs)
+- [Development](#development)
+- [Credits](#credits)
+- [Disclaimer](#disclaimer)
+- [License](#license)
+
 ## Features
 
 - **Your deck, live.** Cards are crossed off as you draw them, with copies left and the chance to draw each one next.
