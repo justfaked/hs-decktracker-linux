@@ -15,7 +15,8 @@ It reads Hearthstone's own log files and shows your remaining deck, your opponen
 - **Your deck, live.** Cards are crossed off as you draw them, with copies left and the chance to draw each one next.
   Your deck is detected automatically for Arena, Underground Arena and constructed games, or you can paste a deck code.
 - **Your opponent's cards.** Every card they've played, by turn, with generated cards marked, plus everything revealed from their deck. Their hand and deck sizes are always shown.
-- **Arena draft ratings.** [HearthArena](https://www.heartharena.com/tierlist) scores for every pick and for every card in your Arena deck. A quick lookup box shows the score of any card for your class.
+- **Arena draft ratings.** [HearthArena](https://www.heartharena.com/tierlist) scores for every pick and for every card in your Arena deck.
+  With `--read-memory`, the three cards you're offered appear automatically with their scores and the best one highlighted. Without it, a quick lookup box shows the score of any card for your class.
 - **Statistics.** Every game is saved locally. The Stats tab shows:
   - a class-vs-class win-rate matrix
   - win rates over time, by mode, going first vs. on the coin, by game length and by time of day
@@ -23,9 +24,10 @@ It reads Hearthstone's own log files and shows your remaining deck, your opponen
   - win rates per card: when drawn, when in your opening hand, and when played
 - **Catches up on missed games.** Games played while the tracker was off are imported from Hearthstone's logs the next time it starts.
 - **Nothing to install.** Pure Python standard library, no packages and no build step. That suits immutable systems like Bazzite and SteamOS.
-- **Doesn't touch the game.** It only reads log files that Hearthstone writes itself. No memory reading, no injection, nothing runs inside Proton.
+- **Doesn't touch the game.** By default it only reads log files that Hearthstone writes itself. Nothing is injected and nothing runs inside Proton.
+  The optional [memory reading](#reading-the-draft-offer-from-memory) only reads, never writes.
 
-| Arena draft ratings | Stats |
+| Arena draft with `--read-memory` | Stats |
 | --- | --- |
 | ![Draft view with HearthArena ratings](docs/screenshots/draft.jpg) | ![Stats dashboard with class matchup matrix](docs/screenshots/stats.jpg) |
 
@@ -65,10 +67,11 @@ The page updates live: put it on a second monitor, or next to the game in window
 | `--host 0.0.0.0` | Make the page reachable from other devices, like a phone or tablet. It has no login, so only use this on a network you trust. |
 | `--locale deDE` | Card language. By default it matches your game client. |
 | `--db PATH` | Use a different history database |
+| `--read-memory` | Show the Arena draft offer automatically by reading it from the game's memory. See [below](#reading-the-draft-offer-from-memory). |
 
 **Tips**
 
-- **While drafting in Arena,** type part of a card's name into the lookup box to see its rating for your class.
+- **While drafting in Arena,** run with `--read-memory` to see the offered cards' ratings automatically, or type part of a card's name into the lookup box.
 - **If your constructed deck isn't detected,** open *Use a deck code* and paste the code from Hearthstone's deck builder.
 - **To open the Stats tab directly,** use **http://localhost:8765/#stats**.
 
@@ -85,6 +88,24 @@ The tracker follows these files while you play:
 
 The tracker rebuilds the game state from these logs, saves each finished game to a local SQLite database and serves the page from a small local web server.
 
+### Reading the draft offer from memory
+
+Hearthstone doesn't write the three cards you're offered during an Arena draft to any log file.
+To show them automatically, `--read-memory` reads them from the game's memory while you draft, about twice a second:
+
+```sh
+./decktracker.sh --read-memory
+```
+
+- **Read-only.** The tracker opens `/proc/<pid>/mem` for reading. It never writes to the game, sends inputs or changes anything.
+- **What it reads:** the draft screen's current offer, plus your Arena deck with exact copy counts. This also makes Arena deck tracking exact during games.
+  To find these, it looks up class names and Hearthstone's internal service list; it doesn't read your collection, account or anything else.
+- **Requirements:** run the tracker as the same user as the game, directly on the host and not inside a container.
+  Your kernel must allow reading another process's memory: `cat /proc/sys/kernel/yama/ptrace_scope` must print `0`, as it does on Bazzite.
+- **Blizzard's terms:** the EULA forbids third-party software that "collects information from" the game. Memory reading is the same technique Hearthstone Deck Tracker and Firestone use for this feature, and Blizzard has tolerated such trackers for years.
+  It only shows what's already on your screen, but it is not explicitly approved by Blizzard. That's why it's off unless you turn it on.
+- **After Hearthstone updates:** if a patch changes the game's internals, the tracker shows "memory not readable" on the draft panel and everything else keeps working.
+
 ### Where data is stored
 
 | What | Where |
@@ -97,9 +118,10 @@ Nothing about you or your games is sent anywhere.
 
 ## Limitations
 
-- **Arena card counts are approximate.** `Arena.log` lists the cards in your Arena deck, but not how many copies of each.
+- **Without `--read-memory`, Arena card counts are approximate.** `Arena.log` lists the cards in your Arena deck, but not how many copies of each.
   The number of cards left in your deck is always exact, and draw chances are based on it. The per-card list gets more accurate as you play, because the tracker learns copy counts from the cards you draw during a run.
-- **The three cards offered during a draft aren't in the logs.** That's why the draft view has a lookup box instead of showing their ratings automatically.
+  With `--read-memory`, the deck is read with exact copy counts whenever the draft screen is open.
+- **Without `--read-memory`, the three offered cards aren't shown automatically.** They aren't in the logs, so the draft view has a lookup box instead.
 - **Battlegrounds and Mercenaries** are detected but not tracked.
 - **Hearthstone only keeps the logs of the last ~6 sessions.** Start the tracker regularly, or games older than that can't be imported.
 
@@ -141,6 +163,7 @@ python3 -m unittest discover -s tests -t .
 | `decktracker/decks.py` | Deck detection from `Arena.log` / `Decks.log` |
 | `decktracker/tracker.py` | Combines game state and deck into what the page shows |
 | `decktracker/stats.py` | Statistics over the match history |
+| `decktracker/memory.py`, `hsmemory.py` | Read-only Mono memory reader and the Arena draft paths |
 | `decktracker/web/` | The browser UI (plain HTML, CSS and JavaScript) |
 
 Issues and pull requests are welcome.
@@ -149,6 +172,7 @@ Issues and pull requests are welcome.
 
 - [HearthstoneJSON](https://hearthstonejson.com) by HearthSim, for card data and card art
 - [HearthArena](https://www.heartharena.com), for Arena card ratings
+- [Firestone's UnitySpy fork](https://github.com/Zero-to-Heroes/unity-spy-.net4.5) (MIT), whose open-source research into Hearthstone's memory layout made `--read-memory` possible
 - Inspired by [Hearthstone Deck Tracker](https://github.com/HearthSim/Hearthstone-Deck-Tracker) for Windows
 
 ## Disclaimer

@@ -30,6 +30,7 @@ class Deck:
     cards: list[str] = field(default_factory=list)  # one entry per copy
     deckstring: str = ""
     seen_at: datetime = datetime.min
+    exact: bool = False  # card counts known exactly (not inferred from Arena.log)
 
     def copy(self) -> "Deck":
         return replace(self, cards=list(self.cards))
@@ -64,20 +65,27 @@ class DeckDetector:
         self._arena_listing = False  # inside a "Draft deck contains card" block
         self.draft_mode = ""  # last SetDraftMode value, e.g. DRAFTING / REDRAFTING / ACTIVE_DRAFT_DECK
         self.redraft_picks: list[str] = []
+        self.pick_order: list[str] = []  # cards in the order they were picked this draft
+        self._skip_listing = False
         self._finding: dict | None = None  # pending "Finding Game With Deck:" entry
 
     def feed_arena(self, ts: datetime, text: str) -> None:
         if m := RE_ARENA_DECK.search(text):
+            if self.arena and self.arena.exact and self.arena.deck_id == m[1]:
+                self._skip_listing = True  # memory already gave us the exact list
+                return
             self.arena = self._arena_deck(m[1], m[2], ts)
             self._arena_listing = True
             return
-        if self._arena_listing and (m := RE_ARENA_CARD.search(text)):
-            self.arena.cards.append(m[1])
+        if (self._arena_listing or self._skip_listing) and (m := RE_ARENA_CARD.search(text)):
+            if self._arena_listing:
+                self.arena.cards.append(m[1])
             return
-        self._arena_listing = False
+        self._arena_listing = self._skip_listing = False
         if m := RE_ARENA_NEW.search(text):
             self.arena = self._arena_deck(m[1], "", ts)
             self.draft_mode = "DRAFTING"
+            self.pick_order = []
         elif RE_ARENA_REDRAFT.search(text):
             self.redraft_picks = []
         elif self.drafting and self.arena and (m := RE_ARENA_PICK.search(text)):
@@ -87,8 +95,10 @@ class DeckDetector:
             elif self.draft_mode == "REDRAFTING":
                 # The full list is re-printed afterwards, so keep these apart.
                 self.redraft_picks.append(card_id)
+                self.pick_order.append(card_id)
             else:
                 self.arena.cards.append(card_id)
+                self.pick_order.append(card_id)
             self.arena.seen_at = ts
         elif m := RE_ARENA_MODE.search(text):
             self.draft_mode = m[1]
@@ -98,6 +108,14 @@ class DeckDetector:
     @property
     def drafting(self) -> bool:
         return self.draft_mode in ("DRAFTING", "REDRAFTING")
+
+    def set_exact_arena(self, deck_id: str, hero: str, cards: list[str], ts: datetime) -> None:
+        """The arena deck as read from game memory, with exact copy counts."""
+        arena = self.arena
+        if arena and arena.exact and arena.deck_id == deck_id and arena.cards == cards and arena.hero == hero:
+            return
+        self.arena = self._arena_deck(deck_id, hero, ts, cards)
+        self.arena.exact = True
 
     def _arena_deck(self, deck_id: str, hero: str, ts: datetime, cards: list[str] | None = None) -> Deck:
         cls = self.cards.class_of(hero) if hero else None

@@ -6,6 +6,7 @@ from datetime import datetime
 from .cards import CLASS_NAMES, CardDB
 from .decks import ARENA_GAME_TYPES, Deck, DeckDetector, deck_from_code, is_supported
 from .history import History
+from .hsmemory import DraftState
 from .logfile import LogLine
 from .power import Game, Player, PowerParser
 from .ratings import Ratings
@@ -40,6 +41,8 @@ class Tracker:
         self._deck_game: Game | None = None  # game self.deck was resolved for
         self._previous_start: datetime | None = None
         self.recorded: list[dict] = []
+        self.memory_status: str | None = None  # None while memory reading is off
+        self.memory_draft: DraftState | None = None
 
     # -- input ---------------------------------------------------------------
 
@@ -53,6 +56,21 @@ class Tracker:
             self.decks.feed_arena(line.ts, line.text)
         elif line.kind == "Decks":
             self.decks.feed_decks(line.ts, line.text)
+
+    def set_memory_draft(self, state: DraftState | None, status: str) -> bool:
+        """Draft screen state read from game memory; returns True if anything changed."""
+        if (status, state) == (self.memory_status, self.memory_draft):
+            return False
+        self.memory_status, self.memory_draft = status, state
+        if state is not None and state.deck_id and state.deck:
+            self.decks.set_exact_arena(state.deck_id, state.hero, state.deck, datetime.now())
+        return True
+
+    @property
+    def drafting(self) -> bool:
+        if self.memory_status == "ok":  # memory knows whether the draft screen is open
+            return self.memory_draft is not None and self.memory_draft.mode in ("DRAFTING", "REDRAFTING")
+        return self.decks.drafting
 
     def set_manual_deck(self, code: str) -> Deck:
         """Use a pasted deck code for the current game and later constructed games."""
@@ -69,7 +87,7 @@ class Tracker:
             return  # reconnect: keep the deck we already had
         self.deck = self.decks.deck_for(game.game_type, game.start, self._previous_start)
         self._previous_start = game.start
-        if self.deck and self.deck.source == "arena" and self.history is not None:
+        if self.deck and self.deck.source == "arena" and not self.deck.exact and self.history is not None:
             # Arena.log lists each card once per slot without copy counts; top up
             # with the most copies we've actually seen in earlier games of this run.
             listed = Counter(self.deck.cards)
@@ -214,7 +232,19 @@ class Tracker:
         def pick(card_id: str, redrafted: bool) -> dict:
             return {"card": self._card(card_id), "rating": self._rating(cls, card_id), "redraft": redrafted}
 
-        ordered = [pick(c, False) for c in picks] + [pick(c, True) for c in redraft]
+        if arena and arena.exact:
+            # Exact deck from memory: keep the logged pick order for the cards really in it
+            # (the log also records legendaries that were only looked at), then the rest.
+            remaining = Counter(picks)
+            ordered_ids = []
+            for card_id in self.decks.pick_order:
+                if remaining[card_id] > 0:
+                    remaining[card_id] -= 1
+                    ordered_ids.append(card_id)
+            # Cards never picked directly (e.g. a legendary's package) go last.
+            ordered = [pick(c, False) for c in list(remaining.elements()) + ordered_ids]
+        else:
+            ordered = [pick(c, False) for c in picks] + [pick(c, True) for c in redraft]
         scores = [p["rating"]["score"] for p in ordered if p["rating"]]
         tierlist = sorted(
             ({"card": self._card(card_id), "score": score, "tier": tier}
@@ -231,7 +261,28 @@ class Tracker:
             "average": round(sum(scores) / len(scores), 1) if scores else None,
             "tierlist": tierlist,
             "source": "HearthArena" if len(self.ratings) else None,
+            "offer": self._offer(cls),
         }
+
+    def _offer(self, cls: str | None) -> dict | None:
+        """The cards currently offered on the draft screen, with ratings (memory reading only)."""
+        state = self.memory_draft
+        if state is None or not state.choices or state.mode not in ("DRAFTING", "REDRAFTING"):
+            return None
+        rated = state.slot == "CARD"
+        choices = []
+        for choice in state.choices:
+            choices.append({
+                "card": self._card(choice.card_id),
+                "rating": self._rating(cls, choice.card_id) if rated else None,
+                "package": [{"card": self._card(c), "rating": self._rating(cls, c) if rated else None}
+                            for c in choice.package],
+            })
+        scores = [c["rating"]["score"] for c in choices if c["rating"]]
+        for c in choices:
+            c["best"] = bool(scores) and len(scores) > 1 and c["rating"] is not None \
+                and c["rating"]["score"] == max(scores)
+        return {"slot": state.slot, "choices": choices}
 
     def upcoming_deck(self) -> Deck | None:
         candidates = [d for d in (self.decks.arena, self.decks.constructed, self.decks.manual) if d and d.cards]
@@ -242,7 +293,8 @@ class Tracker:
         state: dict = {"session": self.session, "status": "idle", "game": None, "deck": None,
                        "my_deck": None, "opponent": None}
 
-        if self.decks.drafting and (game is None or game.complete or not is_supported(game.game_type)):
+        state["memory"] = {"enabled": self.memory_status is not None, "status": self.memory_status}
+        if self.drafting and (game is None or game.complete or not is_supported(game.game_type)):
             state["status"] = "drafting"
             state["draft"] = self._draft_view()
             deck = self.decks.arena

@@ -191,6 +191,29 @@ function renderRatingResults() {
   for (const r of matches) list.append(cardRow(r.card, { rating: { score: r.score, tier: r.tier } }));
 }
 
+const SLOT_TITLES = { CARD: "Offered now", HERO: "Choose your class", HERO_POWER: "Choose your hero power" };
+
+function renderOffer(offer) {
+  $("draft-offer").hidden = !offer;
+  if (!offer) return;
+  $("offer-title").textContent = SLOT_TITLES[offer.slot] || "Offered now";
+  const list = $("offer-list");
+  list.replaceChildren();
+  const rated = offer.slot === "CARD";
+  for (const choice of offer.choices) {
+    const row = cardRow(choice.card, {
+      rating: rated ? choice.rating : undefined,
+      tag: choice.best ? "best" : null,
+    });
+    if (choice.best) row.classList.add("best");
+    list.append(row);
+    if (choice.package.length) {
+      list.append(el("li", { class: "package" },
+        ...choice.package.map((p) => cardRow(p.card, { rating: rated ? p.rating : undefined, element: "div" }))));
+    }
+  }
+}
+
 function renderDraft(s) {
   const d = s.draft;
   $("draft-title").textContent = d.cls_name ? `Draft · ${d.cls_name}` : "Draft";
@@ -201,9 +224,13 @@ function renderDraft(s) {
   picks.replaceChildren();
   if (!d.picks.length) picks.append(el("li", { class: "empty" }, "No picks yet."));
   for (const p of d.picks) picks.append(cardRow(p.card, { rating: p.rating, tag: p.redraft ? "redraft" : null }));
-  $("draft-source").textContent = d.source
+  const notes = [d.source
     ? "Ratings from HearthArena's tier list (heartharena.com), refreshed daily."
-    : "Arena ratings unavailable — couldn't download HearthArena's tier list.";
+    : "Arena ratings unavailable — couldn't download HearthArena's tier list."];
+  if (!s.memory?.enabled) notes.push("Start the tracker with --read-memory to see the offered cards automatically.");
+  else if (s.memory.status !== "ok") notes.push(`Memory reading: ${s.memory.status}.`);
+  $("draft-source").textContent = notes.join(" ");
+  renderOffer(d.offer);
   renderRatingResults();
 }
 

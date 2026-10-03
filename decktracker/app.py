@@ -8,6 +8,7 @@ from pathlib import Path
 from . import stats
 from .cards import CardDB
 from .history import History
+from .hsmemory import HearthstoneMemory, read_draft_state
 from .logfile import Session, session_dirs
 from .ratings import MAX_AGE as RATINGS_MAX_AGE, Ratings
 from .tracker import Tracker
@@ -15,12 +16,16 @@ from .tracker import Tracker
 log = logging.getLogger(__name__)
 
 POLL_INTERVAL = 0.25
+MEMORY_POLL_INTERVAL = 0.5
+MEMORY_IDLE_INTERVAL = 3.0  # while Hearthstone isn't running or memory can't be read
 FEED_BATCH = 5000  # lines fed per lock acquisition during catch-up
 
 
 class App:
-    def __init__(self, install: Path, cards: CardDB, history: History, ratings: Ratings | None = None):
+    def __init__(self, install: Path, cards: CardDB, history: History, ratings: Ratings | None = None,
+                 memory: HearthstoneMemory | None = None):
         self.install = install
+        self.memory = memory  # None unless memory reading was enabled
         self.ratings = ratings or Ratings()
         self.logs_dir = install / "Logs"
         self.cards = cards
@@ -88,7 +93,21 @@ class App:
     def start(self) -> threading.Thread:
         thread = threading.Thread(target=self._run, name="log-watcher", daemon=True)
         thread.start()
+        if self.memory is not None:
+            threading.Thread(target=self._watch_memory, name="memory-watcher", daemon=True).start()
         return thread
+
+    def _watch_memory(self) -> None:
+        last_status = None
+        while not self._stop.is_set():
+            state, status = read_draft_state(self.memory)
+            if status != last_status:
+                (log.info if status == "ok" else log.warning)("memory reading: %s", status)
+                last_status = status
+            with self.changed:
+                if self.tracker.set_memory_draft(state, status):
+                    self._bump()
+            self._stop.wait(MEMORY_POLL_INTERVAL if status == "ok" else MEMORY_IDLE_INTERVAL)
 
     def stop(self) -> None:
         self._stop.set()
@@ -130,6 +149,8 @@ class App:
         log.info("watching %s", newest)
         tracker = Tracker(self.cards, self.history, newest.name, self.ratings)
         tracker.decks = self.tracker.decks  # remember the last arena/constructed deck
+        tracker.memory_status = self.tracker.memory_status
+        tracker.memory_draft = self.tracker.memory_draft
         with self.changed:
             self.session = Session(newest)
             self.tracker = tracker

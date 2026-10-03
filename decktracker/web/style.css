@@ -295,3 +295,12 @@ tr:last-child td { border-bottom: 0; }
 }
 .tooltip strong { font-size: 14px; }
 .tooltip .line-key { display: inline-block; width: 12px; height: 2px; vertical-align: middle; margin-right: 6px; }
+
+/* Draft offer read from memory */
+#draft-offer { margin-bottom: 14px; }
+#draft-offer h3 { margin-top: 0; }
+.offer { gap: 6px; }
+.offer > .card { height: 46px; font-size: 15px; }
+.offer > .card.best { outline: 2px solid var(--accent); outline-offset: 1px; }
+.offer .package { display: grid; gap: 3px; margin: -2px 0 4px 28px; }
+.offer .package .card { height: 28px; font-size: 13px; }

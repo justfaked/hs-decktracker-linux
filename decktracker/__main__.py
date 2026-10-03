@@ -10,6 +10,7 @@ from . import paths
 from .app import App
 from .cards import CardDB
 from .history import History
+from .hsmemory import HearthstoneMemory
 from .logfile import session_dirs
 from .ratings import Ratings
 from .server import serve
@@ -69,7 +70,11 @@ def cmd_run(args) -> None:
 
     ratings = Ratings.load()
     log.info("arena ratings: %d entries (HearthArena)", len(ratings))
-    app = App(install, cards, History(args.db), ratings)
+    memory = None
+    if args.read_memory:
+        log.info("memory reading enabled: Arena draft offers are read from the game (read-only)")
+        memory = HearthstoneMemory()
+    app = App(install, cards, History(args.db), ratings, memory)
     server = serve(app, args.host, args.port)
     url = f"http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port}/"
     app.start()
@@ -101,6 +106,8 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("--locale", default=d("auto"), help="card language, e.g. enUS or deDE (default: game's)")
         p.add_argument("--db", default=d(None), help="history database path")
         p.add_argument("--open", action="store_true", default=d(False), help="open the page in the default browser")
+        p.add_argument("--read-memory", action="store_true", default=d(False),
+                       help="read the Arena draft offer from Hearthstone's memory (read-only, opt-in)")
 
     common(parser, True)
     run_options(parser, True)
