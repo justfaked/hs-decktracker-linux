@@ -13,9 +13,13 @@ RE_ARENA_NEW = re.compile(r"Got new draft deck with ID: (\d+)")
 RE_ARENA_REDRAFT = re.compile(r"Got new redraft deck with ID: (\d+)")
 RE_ARENA_PICK = re.compile(r"Client chooses: .* \((\S+)\)$")
 RE_ARENA_MODE = re.compile(r"SetDraftMode - (\S+)")
-RE_DECK_NAME = re.compile(r"### (.*)$")
+RE_DECK_NAME = re.compile(r"###(.*)$")  # arena decks have an empty name
 RE_DECK_ID = re.compile(r"# Deck ID: (\d+)")
 RE_DECKSTRING = re.compile(r"^(AAE[A-Za-z0-9+/=]+)$")
+# Decks.log block headers. An arena deck is printed when its game starts and after
+# cards are removed from it (keeping 30 of 35 after a redraft).
+QUEUE_HEADER = "Finding Game With Deck:"
+ARENA_HEADERS = ("Starting Arena Game With Deck:", "Finished Editing Deck:")
 
 ARENA_GAME_TYPES = {"GT_ARENA", "GT_UNDERGROUND_ARENA"}
 UNSUPPORTED_PREFIXES = ("GT_BATTLEGROUNDS", "GT_MERCENARIES")
@@ -67,7 +71,8 @@ class DeckDetector:
         self.redraft_picks: list[str] = []
         self.pick_order: list[str] = []  # cards in the order they were picked this draft
         self._skip_listing = False
-        self._finding: dict | None = None  # pending "Finding Game With Deck:" entry
+        self._finding: dict | None = None  # pending Decks.log block
+        self._finding_header = ""
 
     def feed_arena(self, ts: datetime, text: str) -> None:
         if m := RE_ARENA_DECK.search(text):
@@ -124,8 +129,9 @@ class DeckDetector:
 
     def feed_decks(self, ts: datetime, text: str) -> None:
         text = text.strip()
-        if text.startswith("Finding Game With Deck:"):
+        if text.startswith((QUEUE_HEADER, *ARENA_HEADERS)):
             self._finding = {}
+            self._finding_header = text
             return
         if self._finding is None:
             return
@@ -138,12 +144,21 @@ class DeckDetector:
                 deck = deck_from_code(m[1], self.cards, source="constructed", **self._finding)
             except ValueError:
                 deck = None
-            if deck:
+            if deck and self._finding_header.startswith(QUEUE_HEADER):
                 deck.seen_at = ts
                 self.constructed = deck
+            elif deck and self._is_arena_block(deck.deck_id):
+                hero = deck.hero or (self.arena.hero if self.arena else "")
+                self.set_exact_arena(deck.deck_id, hero, deck.cards, ts)
             self._finding = None
         else:
             self._finding = None
+
+    def _is_arena_block(self, deck_id: str) -> bool:
+        if self._finding_header.startswith(ARENA_HEADERS[0]):
+            return True
+        # Edits are also logged for constructed decks; only follow the arena one.
+        return bool(self.arena and deck_id and deck_id == self.arena.deck_id)
 
     def deck_for(self, game_type: str, game_start: datetime, previous_start: datetime | None) -> Deck | None:
         """The deck the player queued with for a game of this type."""

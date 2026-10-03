@@ -80,6 +80,13 @@ class RatingsTest(unittest.TestCase):
         self.assertEqual(draft["count"], 2)
         self.assertEqual([(p["card"]["id"], p["redraft"]) for p in draft["picks"]][0], ("CARD_C", True))
 
+    def test_redraft_picks_shown_for_exact_deck(self):
+        tracker = run_session({"Arena": draft_log(redraft=True)})
+        tracker.decks.set_exact_arena("50", "HERO_09", ["CARD_A", "CARD_A", "CARD_B"], START)
+        draft = tracker.snapshot()["draft"]
+        self.assertEqual(draft["count"], 3)
+        self.assertEqual([(p["card"]["id"], p["redraft"]) for p in draft["picks"]][0], ("CARD_C", True))
+
     def test_draft_finished_returns_to_idle(self):
         text = draft_log() + LogWriter(START + timedelta(minutes=1)).raw("SetDraftMode - ACTIVE_DRAFT_DECK").text()
         state = run_session({"Arena": text}).snapshot()

@@ -243,6 +243,7 @@ class Tracker:
                     ordered_ids.append(card_id)
             # Cards never picked directly (e.g. a legendary's package) go last.
             ordered = [pick(c, False) for c in list(remaining.elements()) + ordered_ids]
+            ordered += [pick(c, True) for c in redraft]
         else:
             ordered = [pick(c, False) for c in picks] + [pick(c, True) for c in redraft]
         scores = [p["rating"]["score"] for p in ordered if p["rating"]]

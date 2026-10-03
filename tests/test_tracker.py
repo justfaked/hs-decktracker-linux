@@ -84,6 +84,49 @@ class TrackerTest(unittest.TestCase):
         self.assertEqual(record["deck_id"], "777")
         self.assertEqual(sorted(record["deck_cards"]), ["CARD_A", "CARD_A", "CARD_B", "CARD_C"])
 
+    def test_arena_deck_edit_after_redraft(self):
+        # Redraft added CARD_Z; then 30 of 35 were kept: CARD_B dropped, CARD_A now twice.
+        arena = LogWriter(START + timedelta(seconds=10))
+        arena.raw("SetDraftMode - REDRAFTING")
+        arena.raw("DraftManager.OnRedraftBegin - Got new redraft deck with ID: 43")
+        arena.raw("Client chooses: Zulu (CARD_Z)")
+        arena.raw("SetDraftMode - ACTIVE_DRAFT_DECK")
+        code = deckstring.encode(deckstring.DeckDefinition(heroes=[813], cards={1001: 2, 1003: 1, 2002: 1}))
+        decks = LogWriter(START + timedelta(seconds=20))
+        decks.raw("Finished Editing Deck:")
+        decks.raw("### ")
+        decks.raw("# Deck ID: 42")
+        decks.raw(code)
+        tracker = run_session({"Arena": arena_log() + arena.text(), "Decks": decks.text()})
+        state = tracker.snapshot()
+        self.assertEqual(state["status"], "idle")
+        self.assertEqual(state["deck"]["name"], "Arena · Priest")
+        rows = rows_by_id(state["my_deck"]["rows"])
+        self.assertEqual({card_id: r["total"] for card_id, r in rows.items()},
+                         {"CARD_A": 2, "CARD_C": 1, "CARD_Z": 1})
+
+    def test_editing_another_deck_keeps_arena_deck(self):
+        code = deckstring.encode(deckstring.DeckDefinition(heroes=[813], cards={1001: 2}))
+        decks = LogWriter(START + timedelta(seconds=20))
+        decks.raw("Finished Editing Deck:")
+        decks.raw("### My Priest")
+        decks.raw("# Deck ID: 777")
+        decks.raw(code)
+        tracker = run_session({"Arena": arena_log(), "Decks": decks.text()})
+        self.assertEqual(sorted(tracker.decks.arena.cards), ["CARD_A", "CARD_B", "CARD_C"])
+        self.assertIsNone(tracker.decks.constructed)
+
+    def test_arena_game_uses_exact_deck_from_decks_log(self):
+        code = deckstring.encode(deckstring.DeckDefinition(heroes=[813], cards={1001: 2, 1002: 2}))
+        decks = LogWriter(START + timedelta(seconds=20))
+        decks.raw("Starting Arena Game With Deck:")
+        decks.raw("### ")
+        decks.raw("# Deck ID: 42")
+        decks.raw(code)
+        (record,) = run_session({"Arena": arena_log(), "Decks": decks.text(), "Power": arena_game()}).recorded
+        self.assertEqual(record["deck_id"], "42")
+        self.assertEqual(sorted(record["deck_cards"]), ["CARD_A", "CARD_A", "CARD_B", "CARD_B"])
+
     def test_idle_shows_upcoming_deck(self):
         state = run_session({"Arena": arena_log()}).snapshot()
         self.assertEqual(state["status"], "idle")
