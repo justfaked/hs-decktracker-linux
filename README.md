@@ -206,6 +206,21 @@ For constructed games the deck comes from `Decks.log`, which `setup` enables, so
 You can always paste a deck code under *Use a deck code*.
 </details>
 
+## Reporting bugs
+
+Found something that's wrong or confusing? Please [open an issue on GitHub](https://github.com/justfaked/hs-decktracker-linux/issues/new), even if you're not sure it's a bug.
+Hearthstone changes with every expansion and new game modes appear, so many problems only show up in real games. Your report is often the only way they get noticed.
+
+These make a bug much easier to find and fix:
+
+- **What happened and what you expected**, e.g. "after keeping 30 of 35 cards in an Arena redraft, the deck list still showed the old cards".
+- **The game mode** (Arena, Underground Arena, Ranked, …) and roughly when it happened.
+- **Desktop app or browser version**, whether memory reading is on, and the tracker version (`git rev-parse --short HEAD` in the cloned folder).
+- **Hearthstone's logs from that session.** They're in the `Logs` folder next to `Hearthstone.exe`, in a subfolder named after the time the game was started, e.g. `Hearthstone_2026_10_03_22_06_25`.
+  `Arena.log` and `Decks.log` are usually enough for deck problems; for problems during a game, also attach `Power.log`. The tracker can replay these logs exactly, which is often the fastest way to reproduce a bug.
+  The logs contain your BattleTag and your opponents' names. Remove them first if you don't want them public.
+- **The tracker's output**, if it printed a warning or error. Start it from a terminal with `-v` for more detail, e.g. `decktracker app -v` or `./decktracker.sh -v`.
+
 ## Development
 
 ```sh
@@ -222,7 +237,7 @@ python3 -m unittest discover -s tests -t .
 | `decktracker/gui.py`, `desktop.py` | Desktop app (Qt window and tray icon) and app menu integration |
 | `decktracker/web/` | The browser UI (plain HTML, CSS and JavaScript) |
 
-Issues and pull requests are welcome.
+Pull requests are welcome. For bugs, see [Reporting bugs](#reporting-bugs).
 
 ## Credits
 
