@@ -23,9 +23,11 @@ FEED_BATCH = 5000  # lines fed per lock acquisition during catch-up
 
 class App:
     def __init__(self, install: Path, cards: CardDB, history: History, ratings: Ratings | None = None,
-                 memory: HearthstoneMemory | None = None):
+                 read_memory: bool = False, memory_factory=HearthstoneMemory):
         self.install = install
-        self.memory = memory  # None unless memory reading was enabled
+        self._read_memory_at_start = read_memory
+        self._memory_factory = memory_factory
+        self._memory_stop: threading.Event | None = None  # set while memory reading runs
         self.ratings = ratings or Ratings()
         self.logs_dir = install / "Logs"
         self.cards = cards
@@ -93,24 +95,52 @@ class App:
     def start(self) -> threading.Thread:
         thread = threading.Thread(target=self._run, name="log-watcher", daemon=True)
         thread.start()
-        if self.memory is not None:
-            threading.Thread(target=self._watch_memory, name="memory-watcher", daemon=True).start()
+        if self._read_memory_at_start:
+            self.set_read_memory(True)
         return thread
 
-    def _watch_memory(self) -> None:
-        last_status = None
-        while not self._stop.is_set():
-            state, status = read_draft_state(self.memory)
-            if status != last_status:
-                (log.info if status == "ok" else log.warning)("memory reading: %s", status)
-                last_status = status
+    @property
+    def read_memory(self) -> bool:
+        return self._memory_stop is not None
+
+    def set_read_memory(self, enabled: bool) -> None:
+        """Start or stop reading the Arena draft offer from game memory."""
+        if enabled == self.read_memory:
+            return
+        if enabled:
+            log.info("memory reading enabled: Arena draft offers are read from the game (read-only)")
+            self._memory_stop = threading.Event()
+            threading.Thread(target=self._watch_memory, args=(self._memory_factory(), self._memory_stop),
+                             name="memory-watcher", daemon=True).start()
+        else:
+            log.info("memory reading disabled")
+            self._memory_stop.set()
+            self._memory_stop = None
             with self.changed:
-                if self.tracker.set_memory_draft(state, status):
+                if self.tracker.set_memory_draft(None, None):
                     self._bump()
-            self._stop.wait(MEMORY_POLL_INTERVAL if status == "ok" else MEMORY_IDLE_INTERVAL)
+
+    def _watch_memory(self, memory: HearthstoneMemory, stop: threading.Event) -> None:
+        last_status = None
+        try:
+            while not stop.is_set() and not self._stop.is_set():
+                state, status = read_draft_state(memory)
+                if status != last_status:
+                    (log.info if status == "ok" else log.warning)("memory reading: %s", status)
+                    last_status = status
+                with self.changed:
+                    if stop.is_set():  # switched off while reading
+                        break
+                    if self.tracker.set_memory_draft(state, status):
+                        self._bump()
+                stop.wait(MEMORY_POLL_INTERVAL if status == "ok" else MEMORY_IDLE_INTERVAL)
+        finally:
+            memory.close()
 
     def stop(self) -> None:
         self._stop.set()
+        if self._memory_stop is not None:
+            self._memory_stop.set()
 
     def _run(self) -> None:
         try:

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hs-decktracker-linux"
+dynamic = ["version"]
+description = "Hearthstone deck tracker for Linux (Proton/Wine): live deck tracking, Arena draft ratings and stats"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+keywords = ["hearthstone", "deck tracker", "arena", "proton", "linux"]
+classifiers = [
+    "Environment :: Web Environment",
+    "Environment :: X11 Applications :: Qt",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6"]
+
+[project.scripts]
+decktracker = "decktracker.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/justfaked/hs-decktracker-linux"
+
+[tool.setuptools]
+packages = ["decktracker"]
+
+[tool.setuptools.dynamic]
+version = { attr = "decktracker.__version__" }
+
+[tool.setuptools.package-data]
+decktracker = ["web/*"]

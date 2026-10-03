@@ -1,6 +1,7 @@
 """Command line entry point: `python3 -m decktracker [run|setup]`."""
 
 import argparse
+import errno
 import logging
 import subprocess
 import sys
@@ -10,7 +11,6 @@ from . import paths
 from .app import App
 from .cards import CardDB
 from .history import History
-from .hsmemory import HearthstoneMemory
 from .logfile import session_dirs
 from .ratings import Ratings
 from .server import serve
@@ -56,27 +56,48 @@ def check_log_config(install: Path) -> None:
                     ", ".join(missing))
 
 
-def cmd_run(args) -> None:
-    install = resolve_install(args.hs_dir)
+def cmd_setup_desktop(args) -> None:
+    from . import desktop
+    if args.remove:
+        removed = desktop.uninstall()
+        print("Removed:\n  " + "\n  ".join(map(str, removed)) if removed else "Nothing to remove.")
+        return
+    for path in desktop.install(autostart=not args.no_autostart):
+        print(f"Wrote {path}")
+    print(f"\"Deck Tracker\" is now in your app menu (runs: {desktop.command()} app).")
+    if not args.no_autostart:
+        print("Its tray icon starts at login, so games are recorded even when the window is closed.")
+
+
+def build_app(hs_dir: str | None, locale: str = "auto", db: str | None = None,
+              read_memory: bool = False) -> App:
+    """Load card data and ratings and set up the tracker (not started yet)."""
+    install = resolve_install(hs_dir)
     log.info("Hearthstone: %s", install)
     check_log_config(install)
-
-    locale = args.locale
     if locale == "auto":
         sessions = session_dirs(install / "Logs")
         locale = (paths.detect_locale(sessions[-1]) if sessions else None) or "enUS"
     cards = CardDB.load(locale)
     log.info("card data: %d cards (%s)", len(cards), locale)
-
     ratings = Ratings.load()
     log.info("arena ratings: %d entries (HearthArena)", len(ratings))
-    memory = None
-    if args.read_memory:
-        log.info("memory reading enabled: Arena draft offers are read from the game (read-only)")
-        memory = HearthstoneMemory()
-    app = App(install, cards, History(args.db), ratings, memory)
-    server = serve(app, args.host, args.port)
+    return App(install, cards, History(db), ratings, read_memory=read_memory)
+
+
+def cmd_run(args) -> None:
     url = f"http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port}/"
+    app = build_app(args.hs_dir, args.locale, args.db, args.read_memory)
+    try:
+        server = serve(app, args.host, args.port)
+    except OSError as exc:
+        if exc.errno != errno.EADDRINUSE:
+            raise
+        log.error("port %d is already in use; is the tracker (or the tracker app) already running? "
+                  "Try %s or pass --port", args.port, url)
+        if args.open:
+            subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        sys.exit(1)
     app.start()
     log.info("tracker running at %s", url)
     if args.open:
@@ -117,12 +138,24 @@ def main(argv: list[str] | None = None) -> None:
     run_options(run, False)
     setup = sub.add_parser("setup", help="enable the Hearthstone logs the tracker needs")
     common(setup, False)
+    for name, text in (("app", "open the tracker window (desktop app with tray icon)"),
+                       ("tray", "start the desktop app with only its tray icon")):
+        common(sub.add_parser(name, help=text), False)
+    desk = sub.add_parser("setup-desktop", help="add the app to the app menu and start it at login")
+    desk.add_argument("--no-autostart", action="store_true", help="don't start the tray icon at login")
+    desk.add_argument("--remove", action="store_true", help="remove the menu entry, icon and autostart")
+    common(desk, False)
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     if args.command == "setup":
         cmd_setup(args)
+    elif args.command in ("app", "tray"):
+        from . import gui
+        sys.exit(gui.run(show_window=args.command == "app", hs_dir=args.hs_dir))
+    elif args.command == "setup-desktop":
+        cmd_setup_desktop(args)
     else:
         cmd_run(args)
 

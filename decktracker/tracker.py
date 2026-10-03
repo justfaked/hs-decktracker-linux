@@ -57,7 +57,7 @@ class Tracker:
         elif line.kind == "Decks":
             self.decks.feed_decks(line.ts, line.text)
 
-    def set_memory_draft(self, state: DraftState | None, status: str) -> bool:
+    def set_memory_draft(self, state: DraftState | None, status: str | None) -> bool:
         """Draft screen state read from game memory; returns True if anything changed."""
         if (status, state) == (self.memory_status, self.memory_draft):
             return False
