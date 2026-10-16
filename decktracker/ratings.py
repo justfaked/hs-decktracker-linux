@@ -18,8 +18,12 @@ MAX_AGE = 24 * 3600
 RE_SECTION = re.compile(r'<section class="tab tierlist ([a-z-]+)')
 RE_ITEM = re.compile(
     r'<li class="tier [a-z-]+"><header[^>]*>([^<]+)</header>'  # tier heading
-    r'|renders/\w+/([A-Za-z0-9_]+)\.webp">[^<]*</dt><dd class="score[^"]*">(-?\d+)</dd>'  # card + score
+    # card + score; the name may carry a "New" badge and the score a trend arrow
+    r'|renders/\w+/([A-Za-z0-9_]+)\.webp">[^<]*(?:<span[^>]*>[^<]*</span>[^<]*)*</dt>'
+    r'<dd class="score[^"]*">(-?\d+)'
 )
+# Core set reprints (CORE_CS2_029) are listed under the original card's ID (CS2_029).
+RE_REPRINT = re.compile(r"^core_", re.IGNORECASE)
 
 
 def section_class(name: str) -> str:
@@ -53,8 +57,10 @@ class Ratings:
 
     def get(self, cls: str | None, card_id: str) -> tuple[int, str] | None:
         """(score, tier) of a card when drafted as `cls`, or None if unrated."""
+        original = RE_REPRINT.sub("", card_id)
         for key in (cls, "NEUTRAL"):
-            entry = self.data.get(key or "", {}).get(card_id)
+            cards = self.data.get(key or "", {})
+            entry = cards.get(card_id) or cards.get(original)
             if entry:
                 return entry[0], entry[1]
         return None

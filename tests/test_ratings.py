@@ -6,10 +6,12 @@ from tests.helpers import START, LogWriter
 from tests.test_tracker import run_session
 
 
-def card(card_id: str, name: str, score: int) -> str:
+def card(card_id: str, name: str, score: int, new: bool = False, arrow: str = "") -> str:
+    badge = '\n<span class="new">New</span>' if new else ""
+    trend = f'<span class="arrow">{arrow}</span>' if arrow else ""
     return (f'<li><dl class="card score_{score}"><dt class="any commons" data-toggle="popover" '
-            f'data-card-image="https://cdn.heartharena.com/images/renders/enUS/{card_id}.webp">{name} </dt>'
-            f'<dd class="score score_{score}">{score}</dd></dl></li>')
+            f'data-card-image="https://cdn.heartharena.com/images/renders/enUS/{card_id}.webp">{name}{badge}\n</dt>'
+            f'<dd class="score score_{score}">{score}{trend}</dd></dl></li>')
 
 
 # Same markup as heartharena.com/tierlist, trimmed to two classes.
@@ -22,7 +24,8 @@ PAGE = (
     '</ol></li></ul></section>'
     '<section class="tab tierlist any" id="any"><ul class="tiers">'
     '<li class="tier average"><header class="tier-header-6">Average</header><ol class="cards">'
-    + card("CARD_C", "Charlie", 75) + card("CARD_A", "Alpha", 90) +
+    + card("CARD_C", "Charlie", 75) + card("CARD_A", "Alpha", 90)
+    + card("CARD_D", "Delta", 70, new=True) + card("CARD_E", "Echo", 65, arrow="&darr;") +
     '</ol></li></ul></section>'
 )
 
@@ -57,6 +60,14 @@ class RatingsTest(unittest.TestCase):
         self.assertEqual(RATINGS.get("PRIEST", "CARD_C"), (75, "Average"))
         self.assertEqual(RATINGS.get("MAGE", "CARD_A"), (90, "Average"))
         self.assertIsNone(RATINGS.get("PRIEST", "CARD_Z"))
+
+    def test_parse_new_badge_and_trend_arrow(self):
+        self.assertEqual(RATINGS.get("PRIEST", "CARD_D"), (70, "Average"))
+        self.assertEqual(RATINGS.get("PRIEST", "CARD_E"), (65, "Average"))
+
+    def test_core_reprint_uses_original_rating(self):
+        self.assertEqual(RATINGS.get("PRIEST", "CORE_CARD_A"), (110, "Great"))
+        self.assertEqual(RATINGS.get("MAGE", "Core_CARD_C"), (75, "Average"))
 
     def test_draft_view(self):
         tracker = run_session({"Arena": draft_log()})
