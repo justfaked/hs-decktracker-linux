@@ -280,6 +280,19 @@ function renderRatingResults() {
 
 const SLOT_TITLES = { CARD: "Offered now", HERO: "Choose your class", HERO_POWER: "Choose your hero power" };
 
+// Under each class on offer: its win rate this patch (Firestone) and our own runs with it in this mode.
+function classInfo(info) {
+  const g = info.global;
+  const mine = info.mine;
+  return el("li", { class: "class-info" },
+    el("span", { title: g ? `${g.games.toLocaleString()} games tracked by Firestone this patch` : null },
+      [info.cls_name, g ? `${pct(g.winrate)} win rate this patch · #${g.rank} of ${g.of}` : "no win rate yet"]
+        .filter(Boolean).join(" · ")),
+    el("span", {},
+      mine ? `You: ${mine.avg_wins.toFixed(1)} avg wins · ${mine.runs} run${mine.runs === 1 ? "" : "s"} · best ${mine.best}`
+        : "You: no runs yet"));
+}
+
 function renderOffer(offer) {
   $("draft-offer").hidden = !offer;
   if (!offer) return;
@@ -294,6 +307,7 @@ function renderOffer(offer) {
     });
     if (choice.best) row.classList.add("best");
     list.append(row);
+    if (choice.class) list.append(classInfo(choice.class));
     if (choice.package.length) {
       list.append(el("li", { class: "package" },
         ...choice.package.map((p) => cardRow(p.card, { rating: rated ? p.rating : undefined, element: "div" }))));
@@ -321,6 +335,7 @@ function renderDraft(s) {
     ? "Turn on Settings → Read draft offers (game memory) to see the offered cards automatically."
     : "Start the tracker with --read-memory to see the offered cards automatically.");
   else if (s.memory.status !== "ok") notes.push(`Memory reading: ${s.memory.status}.`);
+  if (d.offer?.slot === "HERO") notes.push("Class win rates from Firestone (firestoneapp.com), this patch.");
   $("draft-source").textContent = notes.join(" ");
   renderOffer(d.offer);
   renderRatingResults();

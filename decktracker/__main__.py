@@ -12,6 +12,7 @@ from .app import App
 from .cards import CardDB
 from .history import History
 from .logfile import session_dirs
+from .classstats import ClassStats
 from .ratings import Ratings
 from .server import serve
 
@@ -82,7 +83,9 @@ def build_app(hs_dir: str | None, locale: str = "auto", db: str | None = None,
     log.info("card data: %d cards (%s)", len(cards), locale)
     ratings = Ratings.load()
     log.info("arena ratings: %d entries (HearthArena)", len(ratings))
-    return App(install, cards, History(db), ratings, read_memory=read_memory)
+    class_stats = ClassStats.load()
+    log.info("arena class stats: %s", "loaded (Firestone)" if len(class_stats) else "unavailable")
+    return App(install, cards, History(db), ratings, read_memory=read_memory, class_stats=class_stats)
 
 
 def cmd_run(args) -> None:

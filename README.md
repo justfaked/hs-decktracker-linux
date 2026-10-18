@@ -42,6 +42,7 @@ It reads Hearthstone's own log files and shows your remaining deck, your opponen
 - **Secret helper.** While your opponent has a hidden secret, you see every secret it could be. Secrets are crossed off as soon as you do something that would have triggered them and it didn't, e.g. casting a spell rules out Counterspell. Hover over "ruled out" to see why. In Arena, the list is limited to the secrets in HearthArena's tier list for their class.
 - **Arena draft ratings.** [HearthArena](https://www.heartharena.com/tierlist) scores for every pick and for every card in your Arena deck. Cards that came in a legendary's package are tagged with that legendary, since HearthArena rates only the legendary (needs *Read draft offers*).
   With [memory reading](#reading-the-draft-offer-from-memory) turned on, the three cards you're offered appear automatically with their scores and the best one highlighted. Without it, a quick lookup box shows the score of any card for your class.
+  When choosing a class, each one shows its win rate this patch from [Firestone](https://www.firestoneapp.com) (Arena and Underground Arena separately) and your own average wins per run with it in that mode.
 - **Statistics.** Every game is saved locally. The Stats tab shows:
   - a class-vs-class win-rate matrix
   - win rates over time, by mode, going first vs. on the coin, by game length and by time of day
@@ -187,7 +188,7 @@ Turn on **Read draft offers** in the app's Settings menu or the tray menu, or st
 | App settings | `~/.config/decktracker/settings.json` |
 | Card data and ratings (refreshed daily) | `~/.cache/decktracker/` |
 
-The tracker only connects to the internet to download card data from [HearthstoneJSON](https://hearthstonejson.com) and the [HearthArena](https://www.heartharena.com) tier list. Card images are loaded by your browser from `art.hearthstonejson.com`.
+The tracker only connects to the internet to download card data from [HearthstoneJSON](https://hearthstonejson.com), the [HearthArena](https://www.heartharena.com) tier list and arena class win rates from [Firestone](https://www.firestoneapp.com). Card images are loaded by your browser from `art.hearthstonejson.com`.
 Nothing about you or your games is sent anywhere.
 
 ## Limitations
@@ -270,6 +271,7 @@ Pull requests are welcome. For bugs, see [Reporting bugs](#reporting-bugs).
 
 - [HearthstoneJSON](https://hearthstonejson.com) by HearthSim, for card data and card art
 - [HearthArena](https://www.heartharena.com), for Arena card ratings
+- [Firestone](https://www.firestoneapp.com), for Arena class win rates
 - [Firestone's UnitySpy fork](https://github.com/Zero-to-Heroes/unity-spy-.net4.5) (MIT), whose open-source research into Hearthstone's memory layout made `--read-memory` possible
 - Inspired by [Hearthstone Deck Tracker](https://github.com/HearthSim/Hearthstone-Deck-Tracker) for Windows
 

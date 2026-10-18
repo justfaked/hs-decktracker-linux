@@ -2,10 +2,12 @@ import unittest
 from datetime import datetime
 
 from decktracker import memory as m
+from decktracker.classstats import ClassStats, parse
+from decktracker.history import History
 from decktracker.hsmemory import DraftChoice, DraftState, HearthstoneMemory, read_draft_state
 from decktracker.memory import Mono, MemoryReadError
 from tests.fake_mono import FakeHeap, FakeProcess
-from tests.helpers import CARDS
+from tests.helpers import CARDS, arena_game, arena_log
 from tests.test_ratings import RATINGS
 from tests.test_tracker import run_session
 from tests.test_ratings import draft_log
@@ -152,6 +154,32 @@ class TrackerMemoryTest(unittest.TestCase):
         offer = tracker.snapshot()["draft"]["offer"]
         self.assertEqual(offer["slot"], "HERO")
         self.assertTrue(all(c["rating"] is None and not c["best"] for c in offer["choices"]))
+
+    def test_class_choice_shows_win_rate_and_our_runs(self):
+        history = History(":memory:")
+        run_session({"Arena": arena_log(), "Power": arena_game()}, history)  # one Priest run, 1 win
+        tracker = run_session({"Arena": draft_log()}, history)
+        tracker.class_stats = ClassStats({"underground": {"PRIEST": [100, 45], "MAGE": [300, 180]},
+                                          "arena": {"PRIEST": [10, 9], "MAGE": [10, 1]}})
+        tracker.set_memory_draft(DraftState(mode="DRAFTING", slot="HERO", underground=True,
+                                            choices=[DraftChoice("HERO_09"), DraftChoice("HERO_08")]), "ok")
+        priest, mage = (c["class"] for c in tracker.snapshot()["draft"]["offer"]["choices"])
+        self.assertEqual(priest["global"], {"winrate": 0.45, "games": 100, "rank": 2, "of": 2})
+        self.assertEqual((priest["mine"]["runs"], priest["mine"]["avg_wins"], priest["mine"]["best"]), (1, 1.0, 1))
+        self.assertEqual((mage["global"]["rank"], mage["mine"]), (1, None))
+        # Normal Arena uses its own win rates, and the Underground Arena run doesn't count.
+        tracker.set_memory_draft(DraftState(mode="DRAFTING", slot="HERO", underground=False,
+                                            choices=[DraftChoice("HERO_09")]), "ok")
+        (priest,) = (c["class"] for c in tracker.snapshot()["draft"]["offer"]["choices"])
+        self.assertEqual((priest["global"]["winrate"], priest["mine"]), (0.9, None))
+
+    def test_parse_firestone_class_stats(self):
+        data = {"stats": [
+            {"playerClass": "mage", "playerHeroPower": "HERO_08bp", "totalGames": 90, "totalsWins": 50},
+            {"playerClass": "mage", "playerHeroPower": "HERO_02bp", "totalGames": 10, "totalsWins": 5},
+            {"playerClass": "deathknight", "playerHeroPower": "HERO_11bp", "totalGames": 20, "totalsWins": 8},
+        ]}
+        self.assertEqual(parse(data), {"MAGE": [100, 55], "DEATHKNIGHT": [20, 8]})
 
     def test_memory_status_in_snapshot(self):
         tracker = self.tracker()

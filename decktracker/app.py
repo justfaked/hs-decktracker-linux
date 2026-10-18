@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import stats
 from .cards import CardDB
+from .classstats import MAX_AGE as CLASS_STATS_MAX_AGE, ClassStats
 from .history import History
 from .hsmemory import HearthstoneMemory, read_draft_state
 from .logfile import Session, session_dirs
@@ -23,12 +24,14 @@ FEED_BATCH = 5000  # lines fed per lock acquisition during catch-up
 
 class App:
     def __init__(self, install: Path, cards: CardDB, history: History, ratings: Ratings | None = None,
-                 read_memory: bool = False, memory_factory=HearthstoneMemory):
+                 read_memory: bool = False, memory_factory=HearthstoneMemory,
+                 class_stats: ClassStats | None = None):
         self.install = install
         self._read_memory_at_start = read_memory
         self._memory_factory = memory_factory
         self._memory_stop: threading.Event | None = None  # set while memory reading runs
         self.ratings = ratings or Ratings()
+        self.class_stats = class_stats or ClassStats()
         self.logs_dir = install / "Logs"
         self.cards = cards
         self.history = history
@@ -37,7 +40,7 @@ class App:
         self.history_rev = 0
         self.session: Session | None = None
         self.desktop = False  # inside the desktop app, which has the memory switch in its menus
-        self.tracker = Tracker(cards, history, ratings=self.ratings)
+        self.tracker = Tracker(cards, history, ratings=self.ratings, class_stats=self.class_stats)
         self._snapshot: tuple[int, dict] | None = None
         self._stop = threading.Event()
 
@@ -82,7 +85,7 @@ class App:
         for folder in dirs[:-1]:
             if self.history.session_imported(folder.name):
                 continue
-            tracker = Tracker(self.cards, self.history, folder.name, self.ratings)
+            tracker = Tracker(self.cards, self.history, folder.name, self.ratings, self.class_stats)
             for line in Session(folder).read_new():
                 tracker.feed(line)
             self.history.mark_session_imported(folder.name)
@@ -158,17 +161,21 @@ class App:
                 self._switch_to_newest()
             if self.session is not None:
                 self._feed(self.session.read_new())
-            if time.time() - self.ratings.fetched > RATINGS_MAX_AGE and now - last_ratings > 3600:
+            if now - last_ratings > 3600 and (time.time() - self.ratings.fetched > RATINGS_MAX_AGE
+                                              or time.time() - self.class_stats.fetched > CLASS_STATS_MAX_AGE):
                 last_ratings = now
                 self._refresh_ratings()
             self._stop.wait(POLL_INTERVAL)
 
     def _refresh_ratings(self) -> None:
-        ratings = Ratings.load()
-        if len(ratings):
-            with self.changed:
+        """Card ratings and class stats; each reloads only if its cache is stale."""
+        ratings, class_stats = Ratings.load(), ClassStats.load()
+        with self.changed:
+            if len(ratings):
                 self.ratings.data, self.ratings.fetched = ratings.data, ratings.fetched
-                self._bump()
+            if len(class_stats):
+                self.class_stats.data, self.class_stats.fetched = class_stats.data, class_stats.fetched
+            self._bump()
 
     def _switch_to_newest(self) -> None:
         dirs = session_dirs(self.logs_dir)
@@ -179,7 +186,7 @@ class App:
             self._feed(self.session.read_new())
             self.history.mark_session_imported(self.session.name)
         log.info("watching %s", newest)
-        tracker = Tracker(self.cards, self.history, newest.name, self.ratings)
+        tracker = Tracker(self.cards, self.history, newest.name, self.ratings, self.class_stats)
         tracker.decks = self.tracker.decks  # remember the last arena/constructed deck
         tracker.memory_status = self.tracker.memory_status
         tracker.memory_draft = self.tracker.memory_draft

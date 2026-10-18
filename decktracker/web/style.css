@@ -322,3 +322,5 @@ tr:last-child td { border-bottom: 0; }
 .offer > .card.best { outline: 2px solid var(--accent); outline-offset: 1px; }
 .offer .package { display: grid; gap: 3px; margin: -2px 0 4px 28px; }
 .offer .package .card { height: 28px; font-size: 13px; }
+.offer .class-info { display: flex; justify-content: space-between; gap: 12px; margin: -2px 0 4px 28px;
+  color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }

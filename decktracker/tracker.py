@@ -5,6 +5,7 @@ from datetime import datetime
 
 from . import stats
 from .cards import CLASS_NAMES, CardDB
+from .classstats import ClassStats
 from .decks import ARENA_GAME_TYPES, Deck, DeckDetector, deck_from_code, is_supported
 from .history import History
 from .hsmemory import DraftState
@@ -32,9 +33,10 @@ def mode_name(game_type: str) -> str:
 
 class Tracker:
     def __init__(self, cards: CardDB, history: History | None = None, session: str = "",
-                 ratings: Ratings | None = None):
+                 ratings: Ratings | None = None, class_stats: ClassStats | None = None):
         self.cards = cards
         self.ratings = ratings or Ratings()
+        self.class_stats = class_stats or ClassStats()
         self.history = history
         self.session = session
         self.decks = DeckDetector(cards)
@@ -408,6 +410,7 @@ class Tracker:
         if state is None or not state.choices or state.mode not in ("DRAFTING", "REDRAFTING"):
             return None
         rated = state.slot == "CARD"
+        runs = self._runs_by_class(state.underground) if state.slot == "HERO" else {}
         choices = []
         for choice in state.choices:
             choices.append({
@@ -416,11 +419,24 @@ class Tracker:
                 "package": [{"card": self._card(c), "rating": self._rating(cls, c) if rated else None}
                             for c in choice.package],
             })
+            if state.slot == "HERO":
+                hero_cls = self.cards.class_of(choice.card_id)
+                choices[-1]["class"] = {"cls_name": CLASS_NAMES.get(hero_cls, ""),
+                                        "global": self.class_stats.get(state.underground, hero_cls),
+                                        "mine": runs.get(hero_cls)}
         scores = [c["rating"]["score"] for c in choices if c["rating"]]
         for c in choices:
             c["best"] = bool(scores) and len(scores) > 1 and c["rating"] is not None \
                 and c["rating"]["score"] == max(scores)
         return {"slot": state.slot, "choices": choices}
+
+    def _runs_by_class(self, underground: bool) -> dict[str, dict]:
+        """Our earlier runs in this arena mode, per class: {class: {"runs", "avg_wins", "best", ...}}."""
+        if self.history is None:
+            return {}
+        game_type = "GT_UNDERGROUND_ARENA" if underground else "GT_ARENA"
+        runs = stats.arena_runs(stats.filter_games(self.history.games(), game_type))
+        return {r["my_class"]: r for r in runs["by_class"]}
 
     def upcoming_deck(self) -> Deck | None:
         candidates = [d for d in (self.decks.arena, self.decks.constructed, self.decks.manual) if d and d.cards]
