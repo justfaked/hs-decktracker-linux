@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS deck_copies (
     copies INTEGER NOT NULL,
     PRIMARY KEY (deck_id, card_id)
 );
+CREATE TABLE IF NOT EXISTS arena_packages (
+    deck_id TEXT NOT NULL,
+    legendary TEXT NOT NULL,
+    cards TEXT NOT NULL,
+    PRIMARY KEY (deck_id, legendary)
+);
 CREATE TABLE IF NOT EXISTS sessions (
     name TEXT PRIMARY KEY,
     imported INTEGER NOT NULL DEFAULT 0
@@ -110,6 +116,22 @@ class History:
                 "SELECT card_id, copies FROM deck_copies WHERE deck_id = ?", (deck_id,)
             ).fetchall()
         return {r["card_id"]: r["copies"] for r in rows}
+
+    def add_package(self, deck_id: str, legendary: str, cards: list[str]) -> None:
+        """Remember the cards offered as a legendary's package during an arena draft."""
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT INTO arena_packages (deck_id, legendary, cards) VALUES (?, ?, ?) "
+                "ON CONFLICT(deck_id, legendary) DO UPDATE SET cards = excluded.cards",
+                (deck_id, legendary, json.dumps(cards)),
+            )
+
+    def packages(self, deck_id: str) -> dict[str, list[str]]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT legendary, cards FROM arena_packages WHERE deck_id = ?", (deck_id,)
+            ).fetchall()
+        return {r["legendary"]: json.loads(r["cards"]) for r in rows}
 
     def session_imported(self, name: str) -> bool:
         with self._lock:

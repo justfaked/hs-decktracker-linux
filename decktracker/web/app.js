@@ -32,25 +32,35 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-function ratingBadge(rating) {
-  if (!rating) return el("span", { class: "rating", title: "Not rated" }, "–");
+function ratingBadge(rating, hint) {
+  if (!rating) return el("span", { class: "rating", title: hint || "Not rated" }, "–");
   const slug = rating.tier.toLowerCase().replace(/\s+/g, "-");
   return el("span", { class: `rating t-${slug}`, title: rating.tier }, rating.score);
 }
 
-function cardRow(card, { count, chance, gone, tag, rating, element = "li" } = {}) {
+function cardRow(card, { count, chance, gone, tag, hint, rating, element = "li" } = {}) {
   const row = el(element, {
     class: `card ${card.rarity || ""} ${gone ? "gone" : ""} ${rating !== undefined ? "has-rating" : ""}`,
     style: `--tile: url('${ART}/tiles/${encodeURIComponent(card.id)}.png')`,
     "data-card": card.id,
   },
     el("span", { class: "cost" }, card.cost ?? "–"),
-    el("span", { class: "name" }, card.name, tag ? el("span", { class: "tag" }, tag) : null),
+    el("span", { class: "name" }, card.name, tag ? el("span", { class: "tag", title: hint }, tag) : null),
   );
   if (count !== undefined) row.append(el("span", { class: "count" }, count));
   if (chance !== undefined) row.append(el("span", { class: "chance" }, chance));
-  if (rating !== undefined) row.append(ratingBadge(rating));
+  if (rating !== undefined) row.append(ratingBadge(rating, hint));
   return row;
+}
+
+// A card that came bundled with a legendary pick; HearthArena rates only the legendary.
+function packageInfo(pkg) {
+  if (!pkg) return {};
+  const legendary = pkg.legendary.name;
+  return {
+    tag: `${legendary.split(",")[0]} package`,
+    hint: `Came with ${legendary}. HearthArena rates the legendary, not its package cards.`,
+  };
 }
 
 function pct(x) {
@@ -121,12 +131,14 @@ function renderDeck(s) {
     return;
   }
   for (const r of rows) {
-    const tag = r.created ? "added" : r.unlisted ? "new" : null;
+    const pkg = packageInfo(r.package);
+    const tag = r.created ? "added" : r.unlisted ? "new" : pkg.tag;
     list.append(cardRow(r.card, {
       count: inGame && deck ? `${r.left}/${r.total}` : r.total,
       chance: inGame ? pct(r.chance) : undefined,
       gone: inGame && r.left === 0,
       tag,
+      hint: pkg.hint,
       rating: "rating" in r ? r.rating : undefined,
     }));
   }
@@ -223,7 +235,10 @@ function renderDraft(s) {
   const picks = $("draft-picks");
   picks.replaceChildren();
   if (!d.picks.length) picks.append(el("li", { class: "empty" }, "No picks yet."));
-  for (const p of d.picks) picks.append(cardRow(p.card, { rating: p.rating, tag: p.redraft ? "redraft" : null }));
+  for (const p of d.picks) {
+    const pkg = packageInfo(p.package);
+    picks.append(cardRow(p.card, { rating: p.rating, tag: p.redraft ? "redraft" : pkg.tag, hint: pkg.hint }));
+  }
   const notes = [d.source
     ? "Ratings from HearthArena's tier list (heartharena.com), refreshed daily."
     : "Arena ratings unavailable — couldn't download HearthArena's tier list."];
