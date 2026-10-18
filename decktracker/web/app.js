@@ -171,6 +171,33 @@ function renderSecrets(secrets) {
   });
 }
 
+// Win rate in earlier games like this one. The headline is the most specific level with
+// enough games (the server picks it); every level is listed with its record.
+function renderOdds(odds) {
+  $("odds").hidden = !odds;
+  if (!odds) return;
+  const order = odds.first ? "going first" : "on the coin";
+  const names = {
+    matchup_order: `${odds.my_cls_name} vs ${odds.opp_cls_name} ${order}`,
+    matchup: `${odds.my_cls_name} vs ${odds.opp_cls_name}`,
+    class_order: `${odds.my_cls_name} ${order}`,
+    all: `All ${odds.mode} games`,
+  };
+  const pctText = (x) => (x === null ? "–" : `${Math.round(x * 100)}%`);
+  $("odds-pct").textContent = pctText(odds.winrate);
+  $("odds-pct").className = `odds-pct ${odds.winrate === null ? "" : odds.winrate >= 0.5 ? "up" : "down"}`;
+  $("odds-label").textContent = odds.level
+    ? `win chance · from ${names[odds.level]}`
+    : `win chance · not enough ${odds.mode} games yet`;
+  $("odds-levels").replaceChildren(...odds.levels.map((l) => el("li", {
+    class: `${l.level === odds.level ? "chosen" : ""} ${l.wins + l.losses < 5 ? "thin" : ""}`,
+  },
+    el("span", {}, names[l.level]),
+    el("span", { class: "record" }, l.games ? `${l.wins}–${l.losses}` : "no games"),
+    el("span", { class: "pct" }, pctText(l.winrate)),
+  )));
+}
+
 function handLabel(h) {
   const by = h.by ? ` by ${h.by.name}` : "";
   return {
@@ -202,6 +229,7 @@ function renderOpponent(s) {
   seen.replaceChildren();
   played.replaceChildren();
   const opp = s.game?.opp;
+  renderOdds(s.odds);
   renderSecrets(s.opponent?.secrets || []);
   renderHand(s.opponent?.hand || [], s.opponent ? "Empty hand." : "—");
   if (!opp || !s.opponent) {

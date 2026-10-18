@@ -3,6 +3,7 @@
 from collections import Counter
 from datetime import datetime
 
+from . import stats
 from .cards import CLASS_NAMES, CardDB
 from .decks import ARENA_GAME_TYPES, Deck, DeckDetector, deck_from_code, is_supported
 from .history import History
@@ -41,6 +42,7 @@ class Tracker:
                                   on_block_start=self._block_start, on_block_end=self._block_end,
                                   on_step=self._step)
         self.secrets = SecretWatcher()  # the opponent's secrets in the current game
+        self._odds: tuple[tuple, dict] | None = None  # (what it was computed for, result)
         self.deck: Deck | None = None
         self._deck_game: Game | None = None  # game self.deck was resolved for
         self._previous_start: datetime | None = None
@@ -281,6 +283,23 @@ class Tracker:
                         "turn": played.get(sid), "options": options})
         return out
 
+    def _odds_view(self, game: Game, me: Player, opp: Player) -> dict | None:
+        """Our win rate in earlier games like this one: same game type, classes and turn order."""
+        my_cls, opp_cls = self._class(game, me), self._class(game, opp)
+        if self.history is None or not my_cls or not opp_cls:
+            return None
+        first = game.player_tag(me, "FIRST_PLAYER") == "1"
+        key = (game.key, my_cls, opp_cls, first)
+        if self._odds is None or self._odds[0] != key:  # once per game, not on every update
+            this_game = f"{self.session}:{game.key}"
+            games = [g for g in stats.filter_games(self.history.games(), game.game_type)
+                     if g["game_key"] != this_game]
+            self._odds = key, {**stats.odds(games, my_cls, opp_cls, first), "first": first,
+                               "mode": mode_name(game.game_type),
+                               "my_cls_name": CLASS_NAMES.get(my_cls, ""),
+                               "opp_cls_name": CLASS_NAMES.get(opp_cls, "")}
+        return self._odds[1]
+
     def _hand_view(self, game: Game, opp: Player) -> list[dict]:
         """The opponent's hand in order: when each card arrived, how, and from what, if known."""
         cards = sorted((e for e in game.entities.values() if e.controller == opp.player_id and e.zone == "HAND"),
@@ -445,6 +464,7 @@ class Tracker:
         state["status"] = "finished" if game.complete else "playing"
         state["game"]["me"] = self._player_info(game, me)
         state["game"]["opp"] = self._player_info(game, opp)
+        state["odds"] = self._odds_view(game, me, opp)
 
         mine = [e for e in game.entities.values() if e.owner == me.player_id and e.in_starting_deck]
         drawn = Counter(e.known_id for e in mine if e.zone != "DECK" and e.known_id)

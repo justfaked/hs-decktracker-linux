@@ -81,5 +81,24 @@ class StatsTest(unittest.TestCase):
         self.assertEqual(lengths["12–14"], 1)
 
 
+class OddsTest(unittest.TestCase):
+    def levels(self, odds: dict) -> dict:
+        return {l["level"]: (l["wins"], l["losses"]) for l in odds["levels"]}
+
+    def test_falls_back_until_there_are_enough_games(self):
+        games = [game(1, "WON", "MAGE", "ROGUE", first=0),
+                 *[game(2, "LOST", "MAGE", "ROGUE", first=1) for _ in range(4)],
+                 *[game(3, "WON", "MAGE", "WARRIOR", first=0) for _ in range(3)]]
+        odds = stats.odds(games, "MAGE", "ROGUE", went_first=False)
+        self.assertEqual(self.levels(odds), {"matchup_order": (1, 0), "matchup": (1, 4),
+                                             "class_order": (4, 0), "all": (4, 4)})
+        # 1 game on the coin vs Rogue is too few; Mage vs Rogue overall has 5.
+        self.assertEqual((odds["level"], odds["winrate"]), ("matchup", 0.2))
+
+    def test_no_level_with_enough_games(self):
+        odds = stats.odds([game(1, "WON", "MAGE", "ROGUE")], "MAGE", "ROGUE", went_first=True)
+        self.assertEqual((odds["level"], odds["winrate"]), (None, None))
+
+
 if __name__ == "__main__":
     unittest.main()

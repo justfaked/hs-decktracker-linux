@@ -241,6 +241,28 @@ def opponent_card_stats(games: list[dict], cards: CardDB | None) -> list[dict]:
     return sorted(rows, key=lambda r: (-r["games"], r["card"]["name"]))
 
 
+MIN_ODDS_GAMES = 5  # decided games a win rate needs before it's used as the live win chance
+
+
+def odds(games: list[dict], my_class: str | None, opp_class: str | None, went_first: bool) -> dict:
+    """Win rates for an upcoming game, from the exact matchup and turn order out to all games.
+
+    The headline is the most specific level with enough games; exact matchups are often too rare.
+    """
+    order = int(went_first)
+    levels = [
+        ("matchup_order", lambda g: g["my_class"] == my_class and g["opp_class"] == opp_class
+         and g.get("went_first") == order),
+        ("matchup", lambda g: g["my_class"] == my_class and g["opp_class"] == opp_class),
+        ("class_order", lambda g: g["my_class"] == my_class and g.get("went_first") == order),
+        ("all", lambda g: True),
+    ]
+    records = [{"level": name, **record_of([g for g in games if keep(g)])} for name, keep in levels]
+    best = next((r for r in records if r["wins"] + r["losses"] >= MIN_ODDS_GAMES), None)
+    return {"winrate": best["winrate"] if best else None, "level": best["level"] if best else None,
+            "levels": records}
+
+
 def compute(all_games: list[dict], cards: CardDB | None = None, mode: str = "all",
             days: int | None = None, my_class: str = "all", now: datetime | None = None) -> dict:
     games = filter_games(all_games, mode, days, my_class, now)

@@ -43,6 +43,18 @@ class TrackerTest(unittest.TestCase):
         self.assertEqual(record["my_opening"], ["CARD_A"])
         self.assertEqual(record["my_played"], [])
 
+    def test_win_chance_from_earlier_games_like_this_one(self):
+        history = History(":memory:")
+        normal_arena = arena_game(start=START).replace("GT_UNDERGROUND_ARENA", "GT_ARENA")
+        games = normal_arena + "".join(arena_game(start=START + timedelta(minutes=20 * i)) for i in range(1, 7))
+        odds = run_session({"Arena": arena_log(), "Power": games}, history).snapshot()["odds"]
+        # Priest vs Mage going first in Underground Arena, won 5 times before; neither the
+        # normal Arena game nor the game on screen counts.
+        self.assertEqual((odds["level"], odds["winrate"], odds["first"]), ("matchup_order", 1.0, True))
+        self.assertEqual(odds["levels"][0]["games"], 5)
+        self.assertEqual((odds["my_cls_name"], odds["opp_cls_name"], odds["mode"]),
+                         ("Priest", "Mage", "Underground Arena"))
+
     def test_remaining_deck(self):
         tracker = run_session({"Arena": arena_log(), "Power": arena_game()})
         state = tracker.snapshot()
