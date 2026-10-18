@@ -1,6 +1,8 @@
 import unittest
 from datetime import timedelta
 
+from decktracker.history import History
+from decktracker.hsmemory import DraftChoice, DraftState
 from decktracker.ratings import Ratings, parse_tierlist
 from tests.helpers import START, LogWriter
 from tests.test_tracker import run_session
@@ -103,6 +105,44 @@ class RatingsTest(unittest.TestCase):
         state = run_session({"Arena": text}).snapshot()
         self.assertEqual(state["status"], "idle")
         self.assertEqual(state["deck"]["name"], "Arena · Priest")
+
+
+class PackageTest(unittest.TestCase):
+    DECK = ["CARD_L", "CARD_A", "CARD_C", "CARD_Z", "CARD_B"]
+
+    def tracker(self, history: History | None = None, offers=(("CARD_L", ["CARD_C", "CARD_Z"]),)):
+        tracker = run_session({"Arena": draft_log()}, history)
+        tracker.ratings = RATINGS
+        if offers:
+            tracker.set_memory_draft(DraftState("DRAFTING", "CARD", False,
+                                                [DraftChoice(c, p) for c, p in offers], deck_id="50"), "ok")
+        tracker.set_memory_draft(None, None)
+        tracker.decks.set_exact_arena("50", "HERO_09", self.DECK, START)
+        return tracker
+
+    def package_tags(self, tracker) -> dict:
+        """{card_id: legendary_id or None} for the draft picks."""
+        return {p["card"]["id"]: p["package"] and p["package"]["legendary"]["id"]
+                for p in tracker.snapshot()["draft"]["picks"]}
+
+    def test_offered_package_cards_are_tagged_with_their_legendary(self):
+        tracker = self.tracker()
+        self.assertEqual(self.package_tags(tracker),
+                         {"CARD_L": None, "CARD_A": None, "CARD_C": "CARD_L", "CARD_Z": "CARD_L", "CARD_B": None})
+        tracker.decks.draft_mode = "ACTIVE_DRAFT_DECK"
+        rows = {r["card"]["id"]: r for r in tracker.snapshot()["my_deck"]["rows"]}
+        self.assertEqual(rows["CARD_C"]["package"]["legendary"]["name"], "Lima, the Legend")
+        self.assertIsNone(rows["CARD_A"]["package"])
+
+    def test_packages_of_legendaries_not_taken_are_ignored(self):
+        tracker = self.tracker(offers=(("CARD_M", ["CARD_A", "CARD_B"]),))
+        self.assertEqual(set(self.package_tags(tracker).values()), {None})
+
+    def test_packages_survive_a_restart(self):
+        history = History(":memory:")
+        self.tracker(history)
+        restarted = self.tracker(history, offers=())
+        self.assertEqual(self.package_tags(restarted)["CARD_Z"], "CARD_L")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,8 @@ CARDS = CardDB([
     {"id": "CARD_A", "dbfId": 1001, "name": "Alpha", "cost": 1, "type": "MINION", "rarity": "COMMON", "cardClass": "PRIEST"},
     {"id": "CARD_B", "dbfId": 1002, "name": "Bravo", "cost": 2, "type": "SPELL", "rarity": "RARE", "cardClass": "PRIEST"},
     {"id": "CARD_C", "dbfId": 1003, "name": "Charlie", "cost": 3, "type": "MINION", "rarity": "EPIC", "cardClass": "NEUTRAL"},
+    {"id": "CARD_L", "dbfId": 1004, "name": "Lima, the Legend", "cost": 6, "type": "MINION", "rarity": "LEGENDARY", "cardClass": "PRIEST"},
+    {"id": "CARD_M", "dbfId": 1005, "name": "Mike", "cost": 7, "type": "MINION", "rarity": "LEGENDARY", "cardClass": "NEUTRAL"},
     {"id": "CARD_X", "dbfId": 2001, "name": "X-Ray", "cost": 4, "type": "MINION", "rarity": "COMMON", "cardClass": "MAGE"},
     {"id": "CARD_Z", "dbfId": 2002, "name": "Zulu", "cost": 5, "type": "MINION", "rarity": "COMMON", "cardClass": "NEUTRAL"},
     {"id": "GAME_005", "dbfId": 1746, "name": "The Coin", "cost": 0, "type": "SPELL", "cardClass": "NEUTRAL"},

@@ -37,7 +37,7 @@ It reads Hearthstone's own log files and shows your remaining deck, your opponen
 - **Your deck, live.** Cards are crossed off as you draw them, with copies left and the chance to draw each one next.
   Your deck is detected automatically for Arena, Underground Arena and constructed games, or you can paste a deck code.
 - **Your opponent's cards.** Every card they've played, by turn, with generated cards marked, plus everything revealed from their deck. Their hand and deck sizes are always shown.
-- **Arena draft ratings.** [HearthArena](https://www.heartharena.com/tierlist) scores for every pick and for every card in your Arena deck.
+- **Arena draft ratings.** [HearthArena](https://www.heartharena.com/tierlist) scores for every pick and for every card in your Arena deck. Cards that came in a legendary's package are tagged with that legendary, since HearthArena rates only the legendary (needs *Read draft offers*).
   With [memory reading](#reading-the-draft-offer-from-memory) turned on, the three cards you're offered appear automatically with their scores and the best one highlighted. Without it, a quick lookup box shows the score of any card for your class.
 - **Statistics.** Every game is saved locally. The Stats tab shows:
   - a class-vs-class win-rate matrix

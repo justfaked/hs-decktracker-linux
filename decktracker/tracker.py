@@ -43,6 +43,7 @@ class Tracker:
         self.recorded: list[dict] = []
         self.memory_status: str | None = None  # None while memory reading is off
         self.memory_draft: DraftState | None = None
+        self._offered: dict[str, dict[str, list[str]]] = {}  # deck_id -> {legendary: package cards}
 
     # -- input ---------------------------------------------------------------
 
@@ -62,9 +63,41 @@ class Tracker:
         if (status, state) == (self.memory_status, self.memory_draft):
             return False
         self.memory_status, self.memory_draft = status, state
+        if state is not None and state.mode in ("DRAFTING", "REDRAFTING"):
+            self._remember_packages(state)
         if state is not None and state.deck_id and state.deck:
             self.decks.set_exact_arena(state.deck_id, state.hero, state.deck, datetime.now())
         return True
+
+    def _remember_packages(self, state: DraftState) -> None:
+        """Note the package offered with each legendary; HearthArena rates only the legendary."""
+        arena = self.decks.arena
+        deck_id = state.deck_id or (arena.deck_id if arena else "")
+        if not deck_id:
+            return
+        known = self._offered_packages(deck_id)
+        for choice in state.choices:
+            if choice.package and known.get(choice.card_id) != choice.package:
+                known[choice.card_id] = list(choice.package)
+                if self.history is not None:
+                    self.history.add_package(deck_id, choice.card_id, choice.package)
+
+    def _offered_packages(self, deck_id: str) -> dict[str, list[str]]:
+        if deck_id not in self._offered:
+            self._offered[deck_id] = self.history.packages(deck_id) if self.history is not None else {}
+        return self._offered[deck_id]
+
+    def _packages(self, deck: Deck | None) -> dict[str, str]:
+        """Cards of an arena deck that came bundled with one of its legendaries -> that legendary."""
+        if deck is None or not deck.deck_id:
+            return {}
+        out: dict[str, str] = {}
+        for legendary, cards in self._offered_packages(deck.deck_id).items():
+            if legendary in deck.cards:
+                for card_id in cards:
+                    if card_id in deck.cards:
+                        out.setdefault(card_id, legendary)
+        return out
 
     @property
     def drafting(self) -> bool:
@@ -192,10 +225,12 @@ class Tracker:
             rows.append({"card": self._card(card_id), "total": n, "left": n, "created": True})
         rated = deck is not None and deck.source == "arena"
         cls = self.cards.class_of(deck.hero) if deck and deck.hero else None
+        packages = self._packages(deck) if rated else {}
         for row in rows:
             row["chance"] = round(row["left"] / in_deck, 3) if in_deck else 0
             if rated:
                 row["rating"] = self._rating(cls, row["card"]["id"])
+                row["package"] = self._package(packages, row["card"]["id"])
         return {"rows": self._sorted_rows(rows), "in_deck": in_deck,
                 "listed_left": sum(r["left"] for r in rows)}
 
@@ -223,14 +258,20 @@ class Tracker:
         rating = self.ratings.get(cls, card_id)
         return {"score": rating[0], "tier": rating[1]} if rating else None
 
+    def _package(self, packages: dict[str, str], card_id: str) -> dict | None:
+        """{"legendary": card} for a card that came bundled with a legendary pick."""
+        return {"legendary": self._card(packages[card_id])} if card_id in packages else None
+
     def _draft_view(self) -> dict:
         arena = self.decks.arena
         cls = self.cards.class_of(arena.hero) if arena and arena.hero else None
         picks = list(arena.cards) if arena else []
         redraft = list(self.decks.redraft_picks) if self.decks.draft_mode == "REDRAFTING" else []
+        packages = self._packages(arena)
 
         def pick(card_id: str, redrafted: bool) -> dict:
-            return {"card": self._card(card_id), "rating": self._rating(cls, card_id), "redraft": redrafted}
+            return {"card": self._card(card_id), "rating": self._rating(cls, card_id), "redraft": redrafted,
+                    "package": None if redrafted else self._package(packages, card_id)}
 
         if arena and arena.exact:
             # Exact deck from memory: keep the logged pick order for the cards really in it
