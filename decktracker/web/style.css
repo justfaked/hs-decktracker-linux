@@ -156,6 +156,9 @@ h3 { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spac
 
 .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
 
+.card.unknown { border-left-color: var(--muted); }
+.card.unknown .name { font-weight: 500; color: var(--muted); text-shadow: none; }
+
 .secret-head { margin: 8px 0 4px; color: var(--muted); font-size: 12px; }
 #secret-list .secret-head:first-child { margin-top: 0; }
 
