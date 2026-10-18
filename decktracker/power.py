@@ -32,6 +32,15 @@ FINAL_PLAYSTATES = {"WON", "LOST", "TIED"}
 
 
 @dataclass
+class Arrival:
+    """How and when an entity last entered its player's hand."""
+    turn: int
+    origin: str  # zone it came from; "" if it was created in hand
+    source: int | None = None  # card whose effect moved or created it, if any
+    setup: str = ""  # "opening" or "mulligan" while the game is being set up
+
+
+@dataclass
 class Entity:
     id: int
     card_id: str = ""
@@ -39,6 +48,7 @@ class Entity:
     tags: dict[str, str] = field(default_factory=dict)
     in_starting_deck: bool | None = False  # None until ZONE/CONTROLLER are known
     owner: int = 0  # controller when created
+    arrival: Arrival | None = None
 
     @property
     def zone(self) -> str:
@@ -280,6 +290,7 @@ class PowerParser:
             ent.first_card_id = old.first_card_id or ent.first_card_id
             ent.in_starting_deck = old.in_starting_deck
             ent.owner = old.owner
+            ent.arrival = old.arrival
         else:
             ent.in_starting_deck = None  # decided once its ZONE/CONTROLLER tags arrive
         self.game.entities[eid] = ent
@@ -297,6 +308,12 @@ class PowerParser:
 
         if tag == "ZONE" and old == "HAND" and value in ("PLAY", "SECRET") and self._reset_depth is None:
             game.plays.append(Play(turn=game.turn, entity_id=ent.id, player_id=ent.controller))
+        elif tag == "ZONE" and value == "HAND" and old != "HAND" and self._reset_depth is None:
+            setup = ""
+            if game.setup:
+                game_ent = game.entities.get(game.game_entity_id)
+                setup = "mulligan" if game_ent and game_ent.tags.get("STEP") == "BEGIN_MULLIGAN" else "opening"
+            ent.arrival = Arrival(game.turn, old or "", self._source(ent), setup)
         elif ent.id == game.game_entity_id:
             if tag == "STEP" and value not in SETUP_STEPS:
                 if game.setup and game.resumed_from is None:
@@ -335,6 +352,14 @@ class PowerParser:
     @property
     def _depth(self) -> int:
         return len(self._blocks)
+
+    def _source(self, ent: Entity) -> int | None:
+        """The card whose block we're in: the effect that drew or created `ent`."""
+        source = self._blocks[-1].entity_id if self._blocks else None
+        game = self.game
+        if source is None or source in (ent.id, game.game_entity_id) or game.player_for_entity(source):
+            return None
+        return source
 
     def _entity_id(self, ref: str) -> int | None:
         """A card entity's ID; player names are skipped so a block can't claim one."""

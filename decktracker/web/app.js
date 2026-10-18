@@ -171,6 +171,31 @@ function renderSecrets(secrets) {
   });
 }
 
+function handLabel(h) {
+  const by = h.by ? ` by ${h.by.name}` : "";
+  return {
+    opening: "Opening hand", mulligan: "From the mulligan", start: "Given at the start of the game",
+    drawn: `Drawn${by}`, created: `Created${by}`, returned: `Returned to hand${by}`,
+  }[h.how];
+}
+
+// The opponent's hand: when each card arrived and how. Unknown cards show only that;
+// hovering one that was created shows the card that created it.
+function renderHand(hand, emptyText) {
+  const list = $("opp-hand");
+  list.replaceChildren();
+  if (!hand.length) list.append(el("li", { class: "empty" }, emptyText));
+  for (const h of hand) {
+    const when = h.turn !== null ? `Turn ${h.turn}` : h.how === "mulligan" ? "Mulligan" : "Start";
+    const label = handLabel(h);
+    const row = h.card
+      ? cardRow(h.card, { tag: ["created", "returned"].includes(h.how) ? h.how : null, hint: label, element: "div" })
+      : el("div", { class: "card unknown", "data-card": h.by?.id, title: label },
+          el("span", { class: "cost" }, "?"), el("span", { class: "name" }, label));
+    list.append(el("li", {}, el("span", { class: "turn" }, when), row));
+  }
+}
+
 function renderOpponent(s) {
   const seen = $("opp-seen");
   const played = $("opp-played");
@@ -178,6 +203,7 @@ function renderOpponent(s) {
   played.replaceChildren();
   const opp = s.game?.opp;
   renderSecrets(s.opponent?.secrets || []);
+  renderHand(s.opponent?.hand || [], s.opponent ? "Empty hand." : "—");
   if (!opp || !s.opponent) {
     $("opp-name").textContent = "Opponent";
     $("opp-sub").textContent = "No game in progress";

@@ -281,6 +281,36 @@ class Tracker:
                         "turn": played.get(sid), "options": options})
         return out
 
+    def _hand_view(self, game: Game, opp: Player) -> list[dict]:
+        """The opponent's hand in order: when each card arrived, how, and from what, if known."""
+        cards = sorted((e for e in game.entities.values() if e.controller == opp.player_id and e.zone == "HAND"),
+                       key=lambda e: int(e.tags.get("ZONE_POSITION") or 0))
+        out = []
+        for ent in cards:
+            arrival = ent.arrival
+            how, by = "drawn", None
+            if arrival is not None:
+                created = arrival.origin in ("", "SETASIDE", "REMOVEDFROMGAME", "INVALID")
+                if arrival.setup:
+                    how = "start" if created else arrival.setup
+                elif created:
+                    how = "created"
+                    # DISPLAYED_CREATOR is what the game shows; CREATOR is only visible for revealed cards.
+                    by = int(ent.tags.get("DISPLAYED_CREATOR") or ent.tags.get("CREATOR") or 0) or arrival.source
+                else:
+                    how = "drawn" if arrival.origin == "DECK" else "returned"
+                    by = arrival.source
+            creator = game.entities.get(by) if by else None
+            out.append({
+                "turn": (arrival.turn + 1) // 2 if arrival and not arrival.setup else None,
+                "how": how,
+                "card": self._card(ent.card_id) if ent.card_id else None,
+                # A hidden creator (a card still in their hand) is reported as unknown.
+                "by": (self._card(creator.known_id) if creator.known_id else {"id": None, "name": "an unknown card"})
+                      if creator is not None and creator.id != game.game_entity_id else None,
+            })
+        return out
+
     def _deck_info(self, deck: Deck | None) -> dict | None:
         if deck is None:
             return None
@@ -433,5 +463,6 @@ class Tracker:
             "played": [{"turn": t, "card": self._card(c), "created": created}
                        for t, c, created in self._plays(game, opp)],
             "secrets": self._secret_view(game, opp),
+            "hand": self._hand_view(game, opp),
         }
         return state
