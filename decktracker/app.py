@@ -5,7 +5,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import stats
+from . import __version__, stats
 from .cards import CardDB
 from .classstats import MAX_AGE as CLASS_STATS_MAX_AGE, ClassStats
 from .history import History
@@ -54,6 +54,7 @@ class App:
                 state["logs_dir"] = str(self.logs_dir)
                 state["watching"] = self.session is not None
                 state["locale"] = self.cards.locale
+                state["version"] = __version__
                 state["desktop"] = self.desktop
                 self._snapshot = (self.version, state)
             return self._snapshot[1]

@@ -3,11 +3,14 @@ import socket
 import tempfile
 import threading
 import time
+import contextlib
+import io
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from decktracker import desktop
+from decktracker import __version__, desktop
+from decktracker.__main__ import main
 from decktracker.app import App
 from decktracker.gui import free_port, status_text
 from decktracker.history import History
@@ -112,6 +115,16 @@ class MemoryToggleTest(unittest.TestCase):
             self.assertIsNone(app.tracker.memory_status)
             self.assertTrue(memories[0].closed.wait(3))
             app.stop()
+
+
+class VersionTest(unittest.TestCase):
+    def test_version_on_the_page_and_command_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(App(Path(tmp), CARDS, History(":memory:")).snapshot()["version"], __version__)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+            main(["--version"])
+        self.assertEqual(out.getvalue(), f"decktracker {__version__}\n")
 
 
 class GuiHelpersTest(unittest.TestCase):

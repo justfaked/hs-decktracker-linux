@@ -7,12 +7,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import paths
+from . import __version__, paths
 from .app import App
 from .cards import CardDB
+from .classstats import ClassStats
 from .history import History
 from .logfile import session_dirs
-from .classstats import ClassStats
 from .ratings import Ratings
 from .server import serve
 
@@ -116,6 +116,7 @@ def cmd_run(args) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="decktracker", description="Hearthstone deck tracker for Linux/Proton")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     # Options work before or after the subcommand; subcommands don't override
     # values given at the top level, hence SUPPRESS defaults there.
     def common(p: argparse.ArgumentParser, top: bool) -> None:

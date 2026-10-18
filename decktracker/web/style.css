@@ -54,6 +54,7 @@ body {
 .status.lost { color: var(--loss); }
 .status.offline .dot { background: var(--loss); }
 
+.version { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .tabs { display: flex; gap: 4px; background: var(--panel); padding: 3px; border-radius: 8px; }
 .tab {
   border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600;

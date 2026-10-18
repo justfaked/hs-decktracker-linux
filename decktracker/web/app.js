@@ -344,6 +344,7 @@ function renderDraft(s) {
 function render(s) {
   state = s;
   locale = s.locale || locale;
+  if (s.version) $("version").textContent = `v${s.version}`;
   const drafting = s.status === "drafting";
   $("draft-panel").hidden = !drafting;
   $("opp-panel").hidden = drafting;
