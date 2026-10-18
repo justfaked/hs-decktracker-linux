@@ -37,6 +37,7 @@ It reads Hearthstone's own log files and shows your remaining deck, your opponen
 - **Your deck, live.** Cards are crossed off as you draw them, with copies left and the chance to draw each one next.
   Your deck is detected automatically for Arena, Underground Arena and constructed games, or you can paste a deck code.
 - **Your opponent's cards.** Every card they've played, by turn, with generated cards marked, plus everything revealed from their deck. Their hand and deck sizes are always shown.
+- **Secret helper.** While your opponent has a hidden secret, you see every secret it could be. Secrets are crossed off as soon as you do something that would have triggered them and it didn't, e.g. casting a spell rules out Counterspell. Hover over "ruled out" to see why. In Arena, the list is limited to the secrets in HearthArena's tier list for their class.
 - **Arena draft ratings.** [HearthArena](https://www.heartharena.com/tierlist) scores for every pick and for every card in your Arena deck. Cards that came in a legendary's package are tagged with that legendary, since HearthArena rates only the legendary (needs *Read draft offers*).
   With [memory reading](#reading-the-draft-offer-from-memory) turned on, the three cards you're offered appear automatically with their scores and the best one highlighted. Without it, a quick lookup box shows the score of any card for your class.
 - **Statistics.** Every game is saved locally. The Stats tab shows:
@@ -194,6 +195,8 @@ Nothing about you or your games is sent anywhere.
   With `--read-memory`, the deck is read with exact copy counts whenever the draft screen is open.
 - **Without `--read-memory`, the three offered cards aren't shown automatically.** They aren't in the logs, so the draft view has a lookup box instead.
 - **Battlegrounds and Mercenaries** are detected but not tracked.
+- **The secret helper only rules out secrets whose trigger it knows.** Secrets that trigger under conditions the logs don't show (e.g. Ice Block, Hidden Cache) always stay on the list.
+  In Standard and Wild games, every secret of the class is listed, as the tracker doesn't know which sets are in Standard.
 - **Hearthstone only keeps the logs of the last ~6 sessions.** Start the tracker regularly, or games older than that can't be imported.
 
 ## Troubleshooting

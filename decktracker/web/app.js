@@ -151,12 +151,33 @@ function renderDeck(s) {
   }
 }
 
+// Each hidden secret with the cards it could be; ruled-out ones are crossed off, the reason on hover.
+function renderSecrets(secrets) {
+  const list = $("secret-list");
+  list.replaceChildren();
+  $("opp-secrets").hidden = !secrets.length;
+  secrets.forEach((secret, i) => {
+    const open = secret.options.filter((o) => !o.ruled_out).length;
+    list.append(el("p", { class: "secret-head" },
+      [secrets.length > 1 ? `Secret ${i + 1}` : "Secret", secret.cls_name,
+       secret.turn ? `played turn ${secret.turn}` : null,
+       open ? `${open} of ${secret.options.length} possible` : "none of the known secrets fit"]
+        .filter(Boolean).join(" · ")));
+    list.append(el("ol", { class: "cards" }, secret.options.map((o) => cardRow(o.card, {
+      gone: Boolean(o.ruled_out),
+      tag: o.ruled_out ? "ruled out" : null,
+      hint: o.ruled_out,
+    }))));
+  });
+}
+
 function renderOpponent(s) {
   const seen = $("opp-seen");
   const played = $("opp-played");
   seen.replaceChildren();
   played.replaceChildren();
   const opp = s.game?.opp;
+  renderSecrets(s.opponent?.secrets || []);
   if (!opp || !s.opponent) {
     $("opp-name").textContent = "Opponent";
     $("opp-sub").textContent = "No game in progress";

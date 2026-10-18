@@ -156,6 +156,9 @@ h3 { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spac
 
 .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
 
+.secret-head { margin: 8px 0 4px; color: var(--muted); font-size: 12px; }
+#secret-list .secret-head:first-child { margin-top: 0; }
+
 /* Deck code form */
 .paste { margin-top: 14px; color: var(--muted); }
 .paste summary { cursor: pointer; font-size: 13px; }

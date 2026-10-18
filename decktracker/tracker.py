@@ -8,8 +8,9 @@ from .decks import ARENA_GAME_TYPES, Deck, DeckDetector, deck_from_code, is_supp
 from .history import History
 from .hsmemory import DraftState
 from .logfile import LogLine
-from .power import Game, Player, PowerParser
+from .power import Block, Game, Player, PowerParser
 from .ratings import Ratings
+from .secrets import SecretInfo, SecretWatcher, secrets_in_play
 
 HIDDEN_TYPES = {"ENCHANTMENT", "HERO_POWER", "PLAYER", "GAME", "MOVE_MINION_HOVER_TARGET", "BATTLEGROUND_SPELL"}
 
@@ -36,7 +37,10 @@ class Tracker:
         self.history = history
         self.session = session
         self.decks = DeckDetector(cards)
-        self.parser = PowerParser(on_game_start=self._game_started, on_game_end=self._game_ended)
+        self.parser = PowerParser(on_game_start=self._game_started, on_game_end=self._game_ended,
+                                  on_block_start=self._block_start, on_block_end=self._block_end,
+                                  on_step=self._step)
+        self.secrets = SecretWatcher()  # the opponent's secrets in the current game
         self.deck: Deck | None = None
         self._deck_game: Game | None = None  # game self.deck was resolved for
         self._previous_start: datetime | None = None
@@ -131,6 +135,24 @@ class Tracker:
     def _game_started(self, game: Game) -> None:
         if game.resumed_from is None:
             self.deck = None
+            self.secrets = SecretWatcher()
+
+    def _sides(self, game: Game) -> tuple[Player, Player] | None:
+        """(opponent, us): the secrets' owner and the player whose actions might trigger them."""
+        me, opp = game.friendly, game.opponent
+        return (opp, me) if me is not None and opp is not None else None
+
+    def _block_start(self, game: Game, block: Block) -> None:
+        if sides := self._sides(game):
+            self.secrets.block_start(game, block, *sides)
+
+    def _block_end(self, game: Game, block: Block) -> None:
+        if sides := self._sides(game):
+            self.secrets.block_end(game, block, *sides)
+
+    def _step(self, game: Game, step: str) -> None:
+        if sides := self._sides(game):
+            self.secrets.step(game, step, *sides)
 
     def _game_ended(self, game: Game) -> None:
         me, opp = game.friendly, game.opponent
@@ -233,6 +255,31 @@ class Tracker:
                 row["package"] = self._package(packages, row["card"]["id"])
         return {"rows": self._sorted_rows(rows), "in_deck": in_deck,
                 "listed_left": sum(r["left"] for r in rows)}
+
+    def _secret_view(self, game: Game, opp: Player) -> list[dict]:
+        """The opponent's hidden secrets, each with the cards it could be and the ones ruled out."""
+        played = {p.entity_id: (p.turn + 1) // 2 for p in game.plays}
+        out = []
+        for sid in secrets_in_play(game, opp):
+            ent = game.entities[sid]
+            if ent.card_id:
+                continue  # revealed
+            cls = ent.tags.get("CLASS")
+            if cls not in CLASS_NAMES or cls == "NEUTRAL":
+                cls = self._class(game, opp)
+            groups = self.cards.secrets(cls) if cls else []
+            if game.game_type in ARENA_GAME_TYPES and ent.in_starting_deck:
+                # Only cards in the arena pool, which HearthArena's tier list covers.
+                groups = [ids for ids in groups if any(self.ratings.get(cls, c) for c in ids)] or groups
+            info = self.secrets.secrets.get(sid) or SecretInfo()
+            options = []
+            for ids in groups:
+                why = next((reason for c in ids if (reason := info.ruled_out(c))), None)
+                options.append({"card": self._card(ids[0]), "ruled_out": why})
+            options.sort(key=lambda o: o["ruled_out"] is not None)
+            out.append({"id": sid, "cls": cls, "cls_name": CLASS_NAMES.get(cls, ""),
+                        "turn": played.get(sid), "options": options})
+        return out
 
     def _deck_info(self, deck: Deck | None) -> dict | None:
         if deck is None:
@@ -385,5 +432,6 @@ class Tracker:
                                        if self._visible(c)]),
             "played": [{"turn": t, "card": self._card(c), "created": created}
                        for t, c, created in self._plays(game, opp)],
+            "secrets": self._secret_view(game, opp),
         }
         return state
