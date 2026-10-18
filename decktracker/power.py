@@ -22,6 +22,7 @@ RE_HIDE = re.compile(r"HIDE_ENTITY - Entity=(.+) tag=(\S+) value=(\S*)")
 RE_TAG_CHANGE = re.compile(r"TAG_CHANGE Entity=(.+) tag=(\S+) value=(\S*)")
 RE_TAG = re.compile(r"tag=(\S+) value=(\S*)$")
 RE_BRACKET_ID = re.compile(r" id=(\d+) zone=")
+RE_BLOCK_START = re.compile(r"BLOCK_START BlockType=(\S+) Entity=(.*?) EffectCardId=(?:.*? Target=(.*?) SubOption=)?")
 RE_PLAYER_NAME = re.compile(r"PlayerID=(\d+), PlayerName=(.*)$")
 RE_GAME_INFO = re.compile(r"(GameType|FormatType|BuildNumber|ScenarioID)=(\S+)")
 
@@ -71,6 +72,13 @@ class Play:
     turn: int
     entity_id: int
     player_id: int
+
+
+@dataclass
+class Block:
+    type: str  # PLAY, ATTACK, TRIGGER, DEATHS, ...
+    entity_id: int | None  # the card played, the attacker, ...
+    target_id: int | None = None
 
 
 @dataclass
@@ -144,12 +152,20 @@ class PowerParser:
         self,
         on_game_start: Callable[[Game], None] | None = None,
         on_game_end: Callable[[Game], None] | None = None,
+        on_block_start: Callable[[Game, Block], None] | None = None,
+        on_block_end: Callable[[Game, Block], None] | None = None,
+        on_step: Callable[[Game, str], None] | None = None,
     ):
+        """on_block_start/on_block_end see only top-level blocks: one per action (a card played,
+        an attack) with everything it set off nested inside. on_step sees GameEntity STEP changes."""
         self.game: Game | None = None
         self.on_game_start = on_game_start or (lambda g: None)
         self.on_game_end = on_game_end or (lambda g: None)
+        self.on_block_start = on_block_start or (lambda g, b: None)
+        self.on_block_end = on_block_end or (lambda g, b: None)
+        self.on_step = on_step or (lambda g, s: None)
         self._current: Entity | None = None  # target of indented tag=... lines
-        self._depth = 0
+        self._blocks: list[Block] = []  # open blocks, outermost first
         self._reset_depth: int | None = None
         self._reset_seen: set[int] = set()
         self._ts = datetime.min
@@ -227,11 +243,17 @@ class PowerParser:
             game.players[pid] = Player(entity_id=eid, player_id=pid, account=f"{m[3]}:{m[4]}")
             self._current = self._create_entity(eid, "")
         elif payload.startswith("BLOCK_START"):
-            self._depth += 1
+            m = RE_BLOCK_START.match(payload)
+            block = Block(m[1], self._entity_id(m[2]), self._entity_id(m[3] or "")) if m else Block("", None)
+            if not self._blocks:
+                self.on_block_start(game, block)
+            self._blocks.append(block)
         elif payload.startswith("BLOCK_END"):
-            self._depth -= 1
+            block = self._blocks.pop() if self._blocks else None
             if self._reset_depth is not None and self._depth < self._reset_depth:
                 self._finish_reset()
+            if block is not None and not self._blocks:
+                self.on_block_end(game, block)
         elif payload == "RESET_GAME":
             # A "rewind" effect: the server re-sends every entity that still exists.
             self._reset_depth = self._depth
@@ -246,7 +268,7 @@ class PowerParser:
             # Reconnect: Hearthstone replays the full state as a new game.
             self.game.resumed_from = previous
         self._current = None
-        self._depth = 0
+        self._blocks = []
         self._reset_depth = None
         self.on_game_start(self.game)
 
@@ -282,6 +304,8 @@ class PowerParser:
                         game.opening_hand[pid] = [e.id for e in game.entities.values()
                                                   if e.controller == pid and e.zone == "HAND"]
                 game.setup = False
+                if value != old:
+                    self.on_step(game, value)
             elif tag == "STATE" and value == "COMPLETE" and not game.complete:
                 game.end = self._ts
                 self.on_game_end(game)
@@ -307,6 +331,16 @@ class PowerParser:
             return game.entities.get(game.game_entity_id)
         player = self._player_by_name(ref)
         return game.entities.get(player.entity_id) if player else None
+
+    @property
+    def _depth(self) -> int:
+        return len(self._blocks)
+
+    def _entity_id(self, ref: str) -> int | None:
+        """A card entity's ID; player names are skipped so a block can't claim one."""
+        ref = ref.strip()
+        ent = self._entity(ref) if ref.startswith("[") or (ref.isdigit() and ref != "0") else None
+        return ent.id if ent else None
 
     def _player_by_name(self, name: str) -> Player | None:
         players = list(self.game.players.values())

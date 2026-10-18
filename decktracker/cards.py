@@ -11,7 +11,8 @@ log = logging.getLogger(__name__)
 
 URL = "https://api.hearthstonejson.com/v1/latest/{locale}/cards.json"
 MAX_AGE = 24 * 3600
-FIELDS = ("id", "dbfId", "name", "cost", "type", "rarity", "cardClass", "set", "collectible")
+FIELDS = ("id", "dbfId", "name", "cost", "type", "rarity", "cardClass", "set", "collectible", "mechanics")
+CACHE_VERSION = 2  # bump when FIELDS change, so old caches get replaced
 
 CLASS_NAMES = {
     "DEATHKNIGHT": "Death Knight", "DEMONHUNTER": "Demon Hunter", "DRUID": "Druid",
@@ -67,11 +68,22 @@ class CardDB:
         card = self._by_id.get(card_id)
         return card.get("cardClass") if card else None
 
+    def secrets(self, cls: str) -> list[list[str]]:
+        """A class's collectible secrets, one ID list per card name (reprints share a name), originals first."""
+        reprint = ("CORE_", "VAN_")
+        by_name: dict[str, list[str]] = {}
+        for card in self._by_id.values():
+            if card.get("collectible") and card.get("cardClass") == cls and "SECRET" in card.get("mechanics", ()):
+                prefix = next((p for p in reprint if card["id"].upper().startswith(p)), "")
+                original = self._by_id.get(card["id"][len(prefix):], card)  # "[CORE 2024] Cheat Death"
+                by_name.setdefault(original["name"], []).append(card["id"])
+        return [sorted(ids, key=lambda i: (i.upper().startswith(reprint), i)) for _, ids in sorted(by_name.items())]
+
     @classmethod
     def load(cls, locale: str = "enUS", directory: Path | None = None, offline: bool = False) -> "CardDB":
         """Load the cached DB, downloading a fresh copy if it is missing or stale."""
         directory = directory or cache_dir()
-        path = directory / f"cards-{locale}.json"
+        path = directory / f"cards-{locale}-v{CACHE_VERSION}.json"
         fresh = path.exists() and time.time() - path.stat().st_mtime < MAX_AGE
         if not fresh and not offline:
             try:
@@ -95,4 +107,5 @@ class CardDB:
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(slim, separators=(",", ":")), encoding="utf-8")
         tmp.replace(path)
+        path.with_name(f"cards-{locale}.json").unlink(missing_ok=True)  # pre-v2 cache
         log.info("card data cached: %d cards", len(slim))

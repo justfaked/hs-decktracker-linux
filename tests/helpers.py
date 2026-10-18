@@ -18,6 +18,14 @@ CARDS = CardDB([
     {"id": "CARD_X", "dbfId": 2001, "name": "X-Ray", "cost": 4, "type": "MINION", "rarity": "COMMON", "cardClass": "MAGE"},
     {"id": "CARD_Z", "dbfId": 2002, "name": "Zulu", "cost": 5, "type": "MINION", "rarity": "COMMON", "cardClass": "NEUTRAL"},
     {"id": "GAME_005", "dbfId": 1746, "name": "The Coin", "cost": 0, "type": "SPELL", "cardClass": "NEUTRAL"},
+    *({"id": card_id, "dbfId": 3000 + i, "name": name, "cost": 3, "type": "SPELL", "rarity": "COMMON",
+       "cardClass": cls, "collectible": True, "mechanics": ["SECRET"]}
+      for i, (card_id, name, cls) in enumerate((
+          ("EX1_287", "Counterspell", "MAGE"), ("CORE_EX1_287", "Counterspell", "MAGE"),
+          ("EX1_289", "Ice Barrier", "MAGE"), ("EX1_294", "Mirror Entity", "MAGE"),
+          ("EX1_295", "Ice Block", "MAGE"), ("AT_002", "Effigy", "MAGE"),
+          ("END_024", "Flames of Infinity", "MAGE"), ("EX1_610", "Explosive Trap", "HUNTER"),
+      ))),
 ])
 
 
