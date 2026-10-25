@@ -12,6 +12,11 @@ const CLASS_NAMES = {
   WARLOCK: "Warlock", WARRIOR: "Warrior",
 };
 
+const SCHOOL_COLORS = {
+  ARCANE: "#c77dff", FEL: "#9be15d", FIRE: "#ff7a45", FROST: "#6ec6ff",
+  HOLY: "#f5d76e", NATURE: "#3fbf7f", SHADOW: "#8f7fd6",
+};
+
 const $ = (id) => document.getElementById(id);
 let state = null;
 let historyRev = -1;
@@ -71,6 +76,94 @@ function className(cls) {
   return CLASS_NAMES[cls] || "";
 }
 
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function titleCase(word) {
+  return word.charAt(0) + word.slice(1).toLowerCase();
+}
+
+function minionType(type) {
+  return { MECHANICAL: "Mech", ALL: "All types" }[type] || titleCase(type);
+}
+
+function chip(label, value, { color, title, on } = {}) {
+  return el("span", { class: `chip ${on ? "on" : ""}`, title },
+    color ? el("span", { class: "swatch", style: `background: ${color}` }) : null, label, el("b", {}, value));
+}
+
+const COUNTERS = {
+  drawn: ["Drawn", "Cards drawn this game, after the mulligan"],
+  discarded: ["Discarded", "Cards discarded this game"],
+  hero_power: ["Hero power", "Hero power uses this game"],
+  healed: ["Healed", "Health restored this game"],
+  overload: ["Overloaded", "Mana overloaded this game"],
+  excavate: ["Excavate tier", "Current Excavate tier"],
+  corpses: ["Corpses", "Corpses available to spend"],
+  fatigue: ["Fatigue next", "Damage of the next draw from an empty deck"],
+};
+
+function elementalChip(e) {
+  const yes = (x) => (x ? "yes" : "no");
+  return chip("Elementals in a row", e.streak, {
+    on: e.this_turn || e.last_turn,
+    title: `Turns in a row with an Elemental played · this turn: ${yes(e.this_turn)} · last turn: ${yes(e.last_turn)}`,
+  });
+}
+
+// What a player has done this game: spells cast per spell school, minions played per type, counters.
+function renderGameStats(box, player) {
+  const spells = player?.spells;
+  const minions = player?.minions;
+  const counters = Object.entries(player?.counters || {});
+  const rows = [];
+  if (spells?.cast) {
+    rows.push([
+      chip("Spells", spells.cast, { title: "Spells cast this game" }),
+      spells.schools.length ? chip("Schools", spells.schools.length, { title: "Different spell schools cast this game" }) : null,
+      ...spells.schools.map((s) => chip(titleCase(s.school), s.count, { color: SCHOOL_COLORS[s.school] })),
+    ]);
+  }
+  if (minions?.played) {
+    rows.push([
+      chip("Minions", minions.played, { title: "Minions played this game" }),
+      ...Object.entries(minions.types).map(([type, n]) => chip(minionType(type), n)),
+      minions.elementals ? elementalChip(minions.elementals) : null,
+    ]);
+  }
+  if (counters.length) {
+    rows.push(counters.map(([name, n]) => chip(COUNTERS[name][0], n, { title: COUNTERS[name][1], on: name === "fatigue" })));
+  }
+  box.replaceChildren(...rows.map((chips) => el("div", { class: "chips" }, chips)));
+  box.hidden = !rows.length;
+}
+
+// What's left in my deck: card types, total minion stats and the mana curve.
+function renderDeckSummary(summary) {
+  const box = $("deck-summary");
+  const left = summary ? Object.values(summary.types).reduce((a, b) => a + b, 0) : 0;
+  box.hidden = !left;
+  if (!left) return;
+  const minions = summary.types.minion || 0;
+  const types = Object.entries(summary.types).sort((a, b) => b[1] - a[1])
+    .map(([type, n]) => plural(n, type)).join(" · ");
+  const most = Math.max(1, ...summary.curve);
+  box.replaceChildren(
+    el("div", {},
+      el("p", {}, types),
+      minions ? el("p", { title: "Total attack / health of the minions left, before buffs" },
+        "Minion stats ", el("b", {}, `${summary.attack}/${summary.health}`),
+        ` · avg ${(summary.attack / minions).toFixed(1)}/${(summary.health / minions).toFixed(1)}`) : null,
+      Object.keys(summary.minion_types).length ? el("p", { title: "Minion types left; dual-type minions count for both" },
+        Object.entries(summary.minion_types).map(([type, n]) => `${minionType(type)} ${n}`).join(" · ")) : null),
+    el("div", { class: "curve", title: "Mana curve of the cards left" }, summary.curve.map((n, cost) => el("div", {},
+      el("span", {}, n || ""),
+      el("span", { class: "bar", style: `height: ${Math.round((n / most) * 28)}px` }),
+      el("span", {}, cost === 7 ? "7+" : cost)))),
+  );
+}
+
 // --- live view --------------------------------------------------------------
 
 function renderStatus(s) {
@@ -126,6 +219,9 @@ function renderDeck(s) {
       : "Queue up a game, or paste a deck code below.";
   }
 
+  renderGameStats($("my-game"), inGame ? s.game.me : null);
+  renderDeckSummary(deck ? s.my_deck?.summary : null);
+
   if (!rows.length) {
     list.append(el("li", { class: "empty" }, inGame ? "No cards drawn yet." : "No deck detected yet."));
     return;
@@ -149,6 +245,45 @@ function renderDeck(s) {
         `It learns the real counts from the cards you draw in this run.`
       : `The list doesn't match the ${s.my_deck.in_deck} cards actually left in your deck.`;
   }
+}
+
+// Minions that died this game, with how often; what resurrect effects can bring back.
+function renderDied(list, note, died, emptyText) {
+  list.replaceChildren();
+  const total = died.reduce((n, r) => n + r.total, 0);
+  note.textContent = total ? plural(total, "minion") : "";
+  if (!died.length) list.append(el("li", { class: "empty" }, emptyText));
+  for (const r of died) {
+    list.append(cardRow(r.card, { count: r.total > 1 ? `×${r.total}` : undefined, tag: r.created ? "generated" : null }));
+  }
+}
+
+// My cards played per turn, newest turn first, with the mana I spent of the crystals I had.
+function renderMyGame(me) {
+  $("my-lists").hidden = !me;
+  if (!me) return;
+  const list = $("my-played");
+  list.replaceChildren();
+  const mana = new Map(me.mana.map((m) => [m.turn, m]));
+  const turns = [...new Set([...me.mana.map((m) => m.turn), ...me.played.map((p) => p.turn)])].sort((a, b) => b - a);
+  if (!turns.length) list.append(el("li", { class: "empty" }, "Nothing played yet."));
+  for (const turn of turns) {
+    const m = mana.get(turn);
+    const label = el("span", { class: "turn" }, `Turn ${turn}`, m ? el("small", {
+      title: `Spent ${m.spent} of ${m.available} mana${m.current ? " so far" : ""}; temporary mana can take it above`,
+    }, `${m.spent}/${m.available}`) : null);
+    const plays = me.played.filter((p) => p.turn === turn);
+    if (!plays.length) {
+      list.append(el("li", {}, label, el("span", { class: "empty" }, m?.current ? "Nothing played yet" : "Nothing played")));
+    }
+    plays.forEach((p, i) => list.append(el("li", {},
+      i ? el("span", { class: "turn" }) : label,
+      cardRow(p.card, { tag: p.created ? "generated" : null, element: "div" }))));
+  }
+  const done = me.mana.filter((m) => !m.current);
+  const unused = done.reduce((n, m) => n + Math.max(0, m.available - m.spent), 0);
+  $("my-mana-note").textContent = done.length ? `${unused} mana unused in ${plural(done.length, "turn")}` : "";
+  renderDied($("my-died"), $("my-died-note"), me.died, "None of your minions have died yet.");
 }
 
 // Each hidden secret with the cards it could be; ruled-out ones are crossed off, the reason on hover.
@@ -232,6 +367,9 @@ function renderOpponent(s) {
   renderOdds(s.odds);
   renderSecrets(s.opponent?.secrets || []);
   renderHand(s.opponent?.hand || [], s.opponent ? "Empty hand." : "—");
+  renderGameStats($("opp-game"), s.opponent ? opp : null);
+  renderDied($("opp-died"), $("opp-died-note"), s.opponent?.died || [],
+    s.opponent ? "None of their minions have died yet." : "—");
   if (!opp || !s.opponent) {
     $("opp-name").textContent = "Opponent";
     $("opp-sub").textContent = "No game in progress";
@@ -350,6 +488,7 @@ function render(s) {
   $("opp-panel").hidden = drafting;
   renderStatus(s);
   renderDeck(s);
+  renderMyGame(drafting ? null : s.me);
   if (drafting) renderDraft(s);
   else renderOpponent(s);
   if (s.history_rev !== historyRev && !$("view-history").hidden) {

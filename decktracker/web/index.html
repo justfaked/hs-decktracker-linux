@@ -29,8 +29,16 @@
         </div>
         <div class="big-count" id="deck-count" title="Cards left in deck"></div>
       </div>
+      <div class="game-stats" id="my-game" hidden></div>
+      <div class="deck-summary" id="deck-summary" hidden></div>
       <ol class="cards" id="deck-list"></ol>
       <p class="note" id="deck-note" hidden></p>
+      <div id="my-lists" hidden>
+        <h3>Played <span class="h-note" id="my-mana-note"></span></h3>
+        <ol class="timeline" id="my-played"></ol>
+        <h3>Died <span class="h-note" id="my-died-note"></span></h3>
+        <ol class="cards" id="my-died"></ol>
+      </div>
       <details class="paste">
         <summary>Use a deck code</summary>
         <form id="deck-form">
@@ -69,6 +77,7 @@
         </div>
         <div class="opp-counts" id="opp-counts"></div>
       </div>
+      <div class="game-stats" id="opp-game" hidden></div>
       <div class="odds" id="odds" hidden>
         <div class="odds-main"><span class="odds-pct" id="odds-pct"></span><span class="sub" id="odds-label"></span></div>
         <ul class="odds-levels" id="odds-levels"></ul>
@@ -83,6 +92,8 @@
       <ol class="cards" id="opp-seen"></ol>
       <h3>Played</h3>
       <ol class="timeline" id="opp-played"></ol>
+      <h3>Died <span class="h-note" id="opp-died-note"></span></h3>
+      <ol class="cards" id="opp-died"></ol>
     </section>
   </main>
 
