@@ -171,13 +171,25 @@ h3 { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spac
 
 /* What happened this game: spells cast per school, ... */
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
-.chips[hidden] { display: none; }
+.chips[hidden], .deck-summary[hidden] { display: none; }
 .chip {
   display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
   background: var(--panel-2); border-radius: 999px; font-size: 12px; color: var(--muted);
 }
 .chip b { color: var(--text); font-variant-numeric: tabular-nums; }
 .swatch { width: 8px; height: 8px; border-radius: 50%; }
+
+/* What's left in my deck */
+.deck-summary {
+  display: flex; justify-content: space-between; align-items: end; gap: 12px;
+  background: var(--panel-2); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;
+  font-size: 12px; color: var(--muted);
+}
+.deck-summary p { margin: 0; }
+.deck-summary b { color: var(--text); font-variant-numeric: tabular-nums; }
+.curve { display: grid; grid-template-columns: repeat(8, 16px); gap: 3px; align-items: end; flex: none; }
+.curve div { display: grid; gap: 2px; text-align: center; font-size: 10px; font-variant-numeric: tabular-nums; }
+.curve .bar { background: var(--mana); border-radius: 2px; min-height: 2px; }
 
 .card.unknown { border-left-color: var(--muted); }
 .card.unknown .name { font-weight: 500; color: var(--muted); text-shadow: none; }

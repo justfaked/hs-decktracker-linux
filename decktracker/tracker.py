@@ -258,7 +258,23 @@ class Tracker:
                 row["rating"] = self._rating(cls, row["card"]["id"])
                 row["package"] = self._package(packages, row["card"]["id"])
         return {"rows": self._sorted_rows(rows), "in_deck": in_deck,
-                "listed_left": sum(r["left"] for r in rows)}
+                "listed_left": sum(r["left"] for r in rows), "summary": self._deck_summary(rows)}
+
+    def _deck_summary(self, rows: list[dict]) -> dict:
+        """What's left in the deck: minion stats, card types and the mana curve (7 = 7+)."""
+        types, curve = Counter(), [0] * 8
+        attack = health = 0
+        for row in rows:
+            card, left = self.cards.get(row["card"]["id"]), row["left"]
+            if card is None or not left:
+                continue
+            types[card.get("type", "").lower()] += left
+            if card.get("cost") is not None:
+                curve[min(card["cost"], 7)] += left
+            if card.get("type") == "MINION":
+                attack += left * card.get("attack", 0)
+                health += left * card.get("health", 0)
+        return {"types": dict(types), "curve": curve, "attack": attack, "health": health}
 
     def _secret_view(self, game: Game, opp: Player) -> list[dict]:
         """The opponent's hidden secrets, each with the cards it could be and the ones ruled out."""

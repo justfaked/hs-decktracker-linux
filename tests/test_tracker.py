@@ -89,6 +89,12 @@ class TrackerTest(unittest.TestCase):
         state = run_session({"Arena": arena_log(), "Power": "".join(lines)}).snapshot()
         self.assertEqual(state["game"]["opp"]["spells"]["cast"], 3)
 
+    def test_remaining_deck_summary(self):
+        state = run_session({"Arena": arena_log(), "Power": arena_game()}).snapshot()
+        # Both Alphas are drawn; Bravo (2-mana spell) and Charlie (3-mana 3/4) are left.
+        self.assertEqual(state["my_deck"]["summary"], {
+            "types": {"spell": 1, "minion": 1}, "curve": [0, 0, 1, 1, 0, 0, 0, 0], "attack": 3, "health": 4})
+
     def test_arena_copy_counts_are_learned(self):
         history = History(":memory:")
         game2 = arena_game(start=START + timedelta(minutes=20), my_draws=("CARD_B", "CARD_C"))
