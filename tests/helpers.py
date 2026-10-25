@@ -15,11 +15,14 @@ CARDS = CardDB([
     {"id": "CARD_B", "dbfId": 1002, "name": "Bravo", "cost": 2, "type": "SPELL", "rarity": "RARE", "cardClass": "PRIEST",
      "spellSchool": "HOLY"},
     {"id": "CARD_C", "dbfId": 1003, "name": "Charlie", "cost": 3, "type": "MINION", "rarity": "EPIC", "cardClass": "NEUTRAL",
-     "attack": 3, "health": 4},
-    {"id": "CARD_L", "dbfId": 1004, "name": "Lima, the Legend", "cost": 6, "type": "MINION", "rarity": "LEGENDARY", "cardClass": "PRIEST"},
+     "attack": 3, "health": 4, "races": ["MURLOC"]},
+    {"id": "CARD_L", "dbfId": 1004, "name": "Lima, the Legend", "cost": 6, "type": "MINION", "rarity": "LEGENDARY", "cardClass": "PRIEST",
+     "races": ["ALL"]},
     {"id": "CARD_M", "dbfId": 1005, "name": "Mike", "cost": 7, "type": "MINION", "rarity": "LEGENDARY", "cardClass": "NEUTRAL"},
-    {"id": "CARD_X", "dbfId": 2001, "name": "X-Ray", "cost": 4, "type": "MINION", "rarity": "COMMON", "cardClass": "MAGE"},
-    {"id": "CARD_Z", "dbfId": 2002, "name": "Zulu", "cost": 5, "type": "MINION", "rarity": "COMMON", "cardClass": "NEUTRAL"},
+    {"id": "CARD_X", "dbfId": 2001, "name": "X-Ray", "cost": 4, "type": "MINION", "rarity": "COMMON", "cardClass": "MAGE",
+     "races": ["ELEMENTAL"]},
+    {"id": "CARD_Z", "dbfId": 2002, "name": "Zulu", "cost": 5, "type": "MINION", "rarity": "COMMON", "cardClass": "NEUTRAL",
+     "races": ["BEAST", "ELEMENTAL"]},
     {"id": "CARD_F", "dbfId": 2003, "name": "Foxtrot", "cost": 4, "type": "SPELL", "cardClass": "MAGE", "spellSchool": "FIRE"},
     {"id": "CARD_I", "dbfId": 2004, "name": "India", "cost": 2, "type": "SPELL", "cardClass": "MAGE", "spellSchool": "FROST"},
     {"id": "GAME_005", "dbfId": 1746, "name": "The Coin", "cost": 0, "type": "SPELL", "cardClass": "NEUTRAL"},
@@ -92,7 +95,8 @@ def arena_game(start: datetime = START + timedelta(seconds=30), my_draws=("CARD_
     """A short Underground Arena game: we (Me#1234, player 1) win against a Mage.
 
     Our deck: entities 4-7. Theirs: 8-11. Heroes 12 (ours) and 13 (theirs).
-    opp_plays: more cards they play after the Coin, created in hand as entities 20, 21, ...
+    opp_plays: more cards they play after the Coin, created in hand as entities 20, 21, ...;
+    a number instead of a card moves the game on to that turn.
     """
     w = LogWriter(start)
     w.power("CREATE_GAME")
@@ -135,6 +139,9 @@ def arena_game(start: datetime = START + timedelta(seconds=30), my_draws=("CARD_
     w.tag(14, "ZONE", "PLAY")
     w.tag(14, "ZONE", "GRAVEYARD")
     for eid, card in enumerate(opp_plays, 20):
+        if isinstance(card, int):
+            w.tag("GameEntity", "TURN", card)
+            continue
         w.entity(eid, card, ZONE="HAND", CONTROLLER=2)
         w.tag(eid, "ZONE", "PLAY")
 
