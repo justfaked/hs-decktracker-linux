@@ -93,7 +93,30 @@ class TrackerTest(unittest.TestCase):
         state = run_session({"Arena": arena_log(), "Power": arena_game()}).snapshot()
         # Both Alphas are drawn; Bravo (2-mana spell) and Charlie (3-mana 3/4) are left.
         self.assertEqual(state["my_deck"]["summary"], {
-            "types": {"spell": 1, "minion": 1}, "curve": [0, 0, 1, 1, 0, 0, 0, 0], "attack": 3, "health": 4})
+            "types": {"spell": 1, "minion": 1}, "curve": [0, 0, 1, 1, 0, 0, 0, 0], "attack": 3, "health": 4,
+            "minion_types": {"MURLOC": 1}})
+
+    def test_minion_types_left_count_amalgams_for_every_type(self):
+        log = arena_log(cards=("CARD_A", "CARD_B", "CARD_C", "CARD_L"))
+        state = run_session({"Arena": log, "Power": arena_game()}).snapshot()
+        # Charlie is a Murloc, Lima is of every type.
+        self.assertEqual(state["my_deck"]["summary"]["minion_types"], {"MURLOC": 2})
+
+    def test_minion_types_played_and_elemental_streak(self):
+        # They're second, so their turns are the even ones: Elementals on turns 2 and 4, none yet on 6.
+        game = arena_game(opp_plays=(4, "CARD_Z", 5, 6, "CARD_C"))
+        minions = run_session({"Arena": arena_log(), "Power": game}).snapshot()["game"]["opp"]["minions"]
+        self.assertEqual(minions["played"], 3)
+        self.assertEqual(minions["types"], {"ELEMENTAL": 2, "BEAST": 1, "MURLOC": 1})
+        self.assertEqual(minions["elementals"], {"this_turn": False, "last_turn": True, "streak": 2})
+
+    def test_elemental_streak_breaks_on_a_turn_without_one(self):
+        game = arena_game(opp_plays=(4, "CARD_C", 5, 6, "CARD_Z"))
+        state = run_session({"Arena": arena_log(), "Power": game}).snapshot()
+        self.assertEqual(state["game"]["opp"]["minions"]["elementals"],
+                         {"this_turn": True, "last_turn": False, "streak": 1})
+        # We haven't played a minion.
+        self.assertEqual(state["game"]["me"]["minions"], {"played": 0, "types": {}, "elementals": None})
 
     def test_arena_copy_counts_are_learned(self):
         history = History(":memory:")

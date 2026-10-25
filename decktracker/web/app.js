@@ -84,23 +84,44 @@ function titleCase(word) {
   return word.charAt(0) + word.slice(1).toLowerCase();
 }
 
-function chip(label, value, { color, title } = {}) {
-  return el("span", { class: "chip", title },
+function minionType(type) {
+  return { MECHANICAL: "Mech", ALL: "All types" }[type] || titleCase(type);
+}
+
+function chip(label, value, { color, title, on } = {}) {
+  return el("span", { class: `chip ${on ? "on" : ""}`, title },
     color ? el("span", { class: "swatch", style: `background: ${color}` }) : null, label, el("b", {}, value));
 }
 
-// What a player has done this game: spells cast, per spell school.
+function elementalChip(e) {
+  const yes = (x) => (x ? "yes" : "no");
+  return chip("Elementals in a row", e.streak, {
+    on: e.this_turn || e.last_turn,
+    title: `Turns in a row with an Elemental played · this turn: ${yes(e.this_turn)} · last turn: ${yes(e.last_turn)}`,
+  });
+}
+
+// What a player has done this game: spells cast per spell school, minions played per type.
 function renderGameStats(box, player) {
   const spells = player?.spells;
-  box.replaceChildren();
+  const minions = player?.minions;
+  const rows = [];
   if (spells?.cast) {
-    box.append(chip("Spells", spells.cast, { title: "Spells cast this game" }));
-    if (spells.schools.length) {
-      box.append(chip("Schools", spells.schools.length, { title: "Different spell schools cast this game" }));
-    }
-    for (const s of spells.schools) box.append(chip(titleCase(s.school), s.count, { color: SCHOOL_COLORS[s.school] }));
+    rows.push([
+      chip("Spells", spells.cast, { title: "Spells cast this game" }),
+      spells.schools.length ? chip("Schools", spells.schools.length, { title: "Different spell schools cast this game" }) : null,
+      ...spells.schools.map((s) => chip(titleCase(s.school), s.count, { color: SCHOOL_COLORS[s.school] })),
+    ]);
   }
-  box.hidden = !box.childElementCount;
+  if (minions?.played) {
+    rows.push([
+      chip("Minions", minions.played, { title: "Minions played this game" }),
+      ...Object.entries(minions.types).map(([type, n]) => chip(minionType(type), n)),
+      minions.elementals ? elementalChip(minions.elementals) : null,
+    ]);
+  }
+  box.replaceChildren(...rows.map((chips) => el("div", { class: "chips" }, chips)));
+  box.hidden = !rows.length;
 }
 
 // What's left in my deck: card types, total minion stats and the mana curve.
@@ -118,7 +139,9 @@ function renderDeckSummary(summary) {
       el("p", {}, types),
       minions ? el("p", { title: "Total attack / health of the minions left, before buffs" },
         "Minion stats ", el("b", {}, `${summary.attack}/${summary.health}`),
-        ` · avg ${(summary.attack / minions).toFixed(1)}/${(summary.health / minions).toFixed(1)}`) : null),
+        ` · avg ${(summary.attack / minions).toFixed(1)}/${(summary.health / minions).toFixed(1)}`) : null,
+      Object.keys(summary.minion_types).length ? el("p", { title: "Minion types left; dual-type minions count for both" },
+        Object.entries(summary.minion_types).map(([type, n]) => `${minionType(type)} ${n}`).join(" · ")) : null),
     el("div", { class: "curve", title: "Mana curve of the cards left" }, summary.curve.map((n, cost) => el("div", {},
       el("span", {}, n || ""),
       el("span", { class: "bar", style: `height: ${Math.round((n / most) * 28)}px` }),

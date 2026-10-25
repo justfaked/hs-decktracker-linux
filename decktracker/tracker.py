@@ -262,7 +262,7 @@ class Tracker:
 
     def _deck_summary(self, rows: list[dict]) -> dict:
         """What's left in the deck: minion stats, card types and the mana curve (7 = 7+)."""
-        types, curve = Counter(), [0] * 8
+        types, curve, minions = Counter(), [0] * 8, Counter()
         attack = health = 0
         for row in rows:
             card, left = self.cards.get(row["card"]["id"]), row["left"]
@@ -274,7 +274,21 @@ class Tracker:
             if card.get("type") == "MINION":
                 attack += left * card.get("attack", 0)
                 health += left * card.get("health", 0)
-        return {"types": dict(types), "curve": curve, "attack": attack, "health": health}
+                minions[card["id"]] += left
+        return {"types": dict(types), "curve": curve, "attack": attack, "health": health,
+                "minion_types": self._minion_types(minions)}
+
+    def _minion_types(self, minions: Counter) -> dict[str, int]:
+        """Minions per type, most first. Dual-type minions count for both types, and minions of
+        every type (Amalgams) for each type there is, or as "ALL" when there's no other."""
+        types = Counter()
+        for card_id, n in minions.items():
+            for race in (self.cards.get(card_id) or {}).get("races", ()):
+                types[race] += n
+        every = types.pop("ALL", 0)
+        if not types:
+            return {"ALL": every} if every else {}
+        return {race: n + every for race, n in types.most_common()}
 
     def _secret_view(self, game: Game, opp: Player) -> list[dict]:
         """The opponent's hidden secrets, each with the cards it could be and the ones ruled out."""
@@ -367,17 +381,51 @@ class Tracker:
             "result": game.result(player),
             "first": game.player_tag(player, "FIRST_PLAYER") == "1",
             "spells": self._spells(game, player),
+            "minions": self._minions(game, player),
         }
+
+    def _played_cards(self, game: Game, player: Player, card_type: str) -> list[tuple[int, dict]]:
+        """(game turn, card) for each card of this type the player has played."""
+        out = []
+        for play in game.plays:
+            ent = game.entities.get(play.entity_id)
+            if play.player_id != player.player_id or ent is None or not ent.known_id:
+                continue
+            card = self.cards.get(ent.known_id)
+            if card is not None and card.get("type") == card_type:
+                out.append((play.turn, card))
+        return out
 
     def _spells(self, game: Game, player: Player) -> dict:
         """Spells the player has cast this game, per spell school, most cast first."""
-        played = [card for _, card_id, _ in self._plays(game, player)
-                  if (card := self.cards.get(card_id)) and card.get("type") == "SPELL"]
+        played = [card for _, card in self._played_cards(game, player, "SPELL")]
         schools = Counter(card["spellSchool"] for card in played if card.get("spellSchool"))
         # The game's own count also includes spells cast by card effects.
         counted = game.player_tag(player, "NUM_SPELLS_PLAYED_THIS_GAME")
         return {"cast": max(int(counted or 0), len(played)),
                 "schools": [{"school": school, "count": n} for school, n in schools.most_common()]}
+
+    def _minions(self, game: Game, player: Player) -> dict:
+        """Minions the player has played this game, per minion type, and their run of Elementals."""
+        played = self._played_cards(game, player, "MINION")
+        return {"played": len(played),
+                "types": self._minion_types(Counter(card["id"] for _, card in played)),
+                "elementals": self._elementals(game, player, played)}
+
+    def _elementals(self, game: Game, player: Player, played: list[tuple[int, dict]]) -> dict | None:
+        """Whether the player played an Elemental this turn and last turn, and in how many of
+        their turns in a row; None until they've played one. Game turns alternate between players."""
+        turns = {turn for turn, card in played if {"ELEMENTAL", "ALL"} & set(card.get("races", ()))}
+        if not turns:
+            return None
+        first = game.player_tag(player, "FIRST_PLAYER") == "1"
+        theirs = game.turn % 2 == (1 if first else 0)
+        current = game.turn if theirs else None
+        last = game.turn - 2 if theirs else game.turn - 1
+        streak, turn = 0, current if current in turns else last
+        while turn in turns:
+            streak, turn = streak + 1, turn - 2
+        return {"this_turn": current in turns, "last_turn": last in turns, "streak": streak}
 
     def _rating(self, cls: str | None, card_id: str) -> dict | None:
         rating = self.ratings.get(cls, card_id)
