@@ -154,6 +154,9 @@ h3 { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spac
 .timeline li { display: grid; grid-template-columns: 52px 1fr; gap: 8px; align-items: center; }
 .timeline .turn { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .timeline .card { grid-template-columns: 28px 1fr auto; }
+.timeline .turn small { display: block; font-size: 11px; }
+.timeline li > .empty { padding: 0; }
+#my-lists[hidden] { display: none; }
 
 .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
 

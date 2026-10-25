@@ -16,6 +16,8 @@ CARDS = CardDB([
      "spellSchool": "HOLY"},
     {"id": "CARD_C", "dbfId": 1003, "name": "Charlie", "cost": 3, "type": "MINION", "rarity": "EPIC", "cardClass": "NEUTRAL",
      "attack": 3, "health": 4, "races": ["MURLOC"]},
+    {"id": "CORE_CARD_C", "dbfId": 1006, "name": "Charlie", "cost": 3, "type": "MINION", "rarity": "EPIC",
+     "cardClass": "NEUTRAL"},
     {"id": "CARD_L", "dbfId": 1004, "name": "Lima, the Legend", "cost": 6, "type": "MINION", "rarity": "LEGENDARY", "cardClass": "PRIEST",
      "races": ["ALL"]},
     {"id": "CARD_M", "dbfId": 1005, "name": "Mike", "cost": 7, "type": "MINION", "rarity": "LEGENDARY", "cardClass": "NEUTRAL"},
@@ -161,3 +163,10 @@ def arena_game(start: datetime = START + timedelta(seconds=30), my_draws=("CARD_
     w.tag("Opp#999", "PLAYSTATE", "LOST")
     w.tag("GameEntity", "STATE", "COMPLETE")
     return w.text()
+
+
+def before_end(game: str, extra: LogWriter, finish: bool = True) -> str:
+    """A game from arena_game() with `extra` played just before it ends, or instead of the end."""
+    lines = game.splitlines(keepends=True)
+    end = next(i for i, line in enumerate(lines) if "Me#1234 tag=PLAYSTATE" in line)
+    return "".join(lines[:end]) + extra.text() + ("".join(lines[end:]) if finish else "")

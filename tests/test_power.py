@@ -2,7 +2,7 @@ import unittest
 
 from decktracker.logfile import LINE_RE
 from decktracker.power import PowerParser
-from tests.helpers import START, arena_game
+from tests.helpers import START, LogWriter, arena_game, before_end
 
 
 def parse(text: str) -> tuple[PowerParser, list]:
@@ -43,6 +43,25 @@ class PowerParserTest(unittest.TestCase):
         _, (game,) = parse(arena_game())
         plays = [(p.turn, p.entity_id, p.player_id) for p in game.plays]
         self.assertEqual(plays, [(2, 8, 2), (2, 14, 2)])
+
+    def test_deaths_draws_and_discards(self):
+        w = LogWriter()
+        w.entity(30, "CARD_C", ZONE="PLAY", CONTROLLER=1, CARDTYPE="MINION")
+        w.entity(31, "CARD_L", ZONE="PLAY", CONTROLLER=1, CARDTYPE="LOCATION")
+        w.entity(32, "CARD_A", ZONE="PLAY", CONTROLLER=1, CARDTYPE="MINION")
+        w.tag(30, "ZONE", "GRAVEYARD")
+        w.tag(31, "ZONE", "GRAVEYARD")  # a location breaking isn't a death
+        w.tag(32, "ZONE", "HAND")  # nor is going back to hand
+        w.tag(8, "CARDTYPE", "MINION")
+        w.tag(8, "ZONE", "GRAVEYARD")
+        w.tag(6, "ZONE", "HAND")
+        w.tag(6, "ZONE", "GRAVEYARD")  # discarded
+        _, (game,) = parse(before_end(arena_game(), w))
+        self.assertEqual([(d.turn, d.entity_id, d.player_id, d.card_id) for d in game.deaths],
+                         [(2, 30, 1, "CARD_C"), (2, 8, 2, "CARD_X")])
+        # Our draws on turns 1 and 2; their card in hand came with the mulligan, which doesn't count.
+        self.assertEqual(game.drawn, {1: 2})
+        self.assertEqual(game.discarded, {1: 1})
 
     def test_rewind_restores_zones(self):
         _, (game,) = parse(arena_game(rewind=True))
