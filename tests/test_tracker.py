@@ -73,6 +73,22 @@ class TrackerTest(unittest.TestCase):
         played = [(p["card"]["id"], p["created"]) for p in state["opponent"]["played"]]
         self.assertEqual(played, [("CARD_X", False), ("GAME_005", True)])
 
+    def test_spells_cast_by_school(self):
+        game = arena_game(opp_plays=("CARD_F", "CARD_I", "CARD_F", "CARD_X"))
+        state = run_session({"Arena": arena_log(), "Power": game}).snapshot()
+        # The Coin counts as a spell but has no school; X-Ray is a minion.
+        self.assertEqual(state["game"]["opp"]["spells"], {
+            "cast": 4, "schools": [{"school": "FIRE", "count": 2}, {"school": "FROST", "count": 1}]})
+        self.assertEqual(state["game"]["me"]["spells"], {"cast": 0, "schools": []})
+
+    def test_spells_cast_by_card_effects_are_counted(self):
+        # The game's own counter knows of more spells than were played from hand.
+        lines = arena_game().splitlines(keepends=True)
+        end = next(i for i, line in enumerate(lines) if "Opp#999 tag=PLAYSTATE" in line)
+        lines.insert(end, lines[end].replace("tag=PLAYSTATE value=LOST", "tag=NUM_SPELLS_PLAYED_THIS_GAME value=3"))
+        state = run_session({"Arena": arena_log(), "Power": "".join(lines)}).snapshot()
+        self.assertEqual(state["game"]["opp"]["spells"]["cast"], 3)
+
     def test_arena_copy_counts_are_learned(self):
         history = History(":memory:")
         game2 = arena_game(start=START + timedelta(minutes=20), my_draws=("CARD_B", "CARD_C"))
