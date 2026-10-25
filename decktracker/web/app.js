@@ -76,6 +76,10 @@ function className(cls) {
   return CLASS_NAMES[cls] || "";
 }
 
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 function titleCase(word) {
   return word.charAt(0) + word.slice(1).toLowerCase();
 }
@@ -97,6 +101,29 @@ function renderGameStats(box, player) {
     for (const s of spells.schools) box.append(chip(titleCase(s.school), s.count, { color: SCHOOL_COLORS[s.school] }));
   }
   box.hidden = !box.childElementCount;
+}
+
+// What's left in my deck: card types, total minion stats and the mana curve.
+function renderDeckSummary(summary) {
+  const box = $("deck-summary");
+  const left = summary ? Object.values(summary.types).reduce((a, b) => a + b, 0) : 0;
+  box.hidden = !left;
+  if (!left) return;
+  const minions = summary.types.minion || 0;
+  const types = Object.entries(summary.types).sort((a, b) => b[1] - a[1])
+    .map(([type, n]) => plural(n, type)).join(" · ");
+  const most = Math.max(1, ...summary.curve);
+  box.replaceChildren(
+    el("div", {},
+      el("p", {}, types),
+      minions ? el("p", { title: "Total attack / health of the minions left, before buffs" },
+        "Minion stats ", el("b", {}, `${summary.attack}/${summary.health}`),
+        ` · avg ${(summary.attack / minions).toFixed(1)}/${(summary.health / minions).toFixed(1)}`) : null),
+    el("div", { class: "curve", title: "Mana curve of the cards left" }, summary.curve.map((n, cost) => el("div", {},
+      el("span", {}, n || ""),
+      el("span", { class: "bar", style: `height: ${Math.round((n / most) * 28)}px` }),
+      el("span", {}, cost === 7 ? "7+" : cost)))),
+  );
 }
 
 // --- live view --------------------------------------------------------------
@@ -155,6 +182,7 @@ function renderDeck(s) {
   }
 
   renderGameStats($("my-game"), inGame ? s.game.me : null);
+  renderDeckSummary(deck ? s.my_deck?.summary : null);
 
   if (!rows.length) {
     list.append(el("li", { class: "empty" }, inGame ? "No cards drawn yet." : "No deck detected yet."));
