@@ -11,8 +11,9 @@ log = logging.getLogger(__name__)
 
 URL = "https://api.hearthstonejson.com/v1/latest/{locale}/cards.json"
 MAX_AGE = 24 * 3600
-FIELDS = ("id", "dbfId", "name", "cost", "type", "rarity", "cardClass", "set", "collectible", "mechanics")
-CACHE_VERSION = 2  # bump when FIELDS change, so old caches get replaced
+FIELDS = ("id", "dbfId", "name", "cost", "type", "rarity", "cardClass", "set", "collectible", "mechanics",
+          "attack", "health", "durability", "races", "spellSchool")
+CACHE_VERSION = 3  # bump when FIELDS change, so old caches get replaced
 
 CLASS_NAMES = {
     "DEATHKNIGHT": "Death Knight", "DEMONHUNTER": "Demon Hunter", "DRUID": "Druid",
@@ -107,5 +108,6 @@ class CardDB:
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(slim, separators=(",", ":")), encoding="utf-8")
         tmp.replace(path)
-        path.with_name(f"cards-{locale}.json").unlink(missing_ok=True)  # pre-v2 cache
+        for old in (f"cards-{locale}.json", *(f"cards-{locale}-v{v}.json" for v in range(2, CACHE_VERSION))):
+            path.with_name(old).unlink(missing_ok=True)
         log.info("card data cached: %d cards", len(slim))
