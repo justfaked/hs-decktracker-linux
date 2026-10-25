@@ -44,6 +44,7 @@ class Tracker:
                                   on_block_start=self._block_start, on_block_end=self._block_end,
                                   on_step=self._step)
         self.secrets = SecretWatcher()  # the opponent's secrets in the current game
+        self.mana: list[tuple[int, dict]] = []  # (player_id, mana spent) per finished turn of the current game
         self._odds: tuple[tuple, dict] | None = None  # (what it was computed for, result)
         self.deck: Deck | None = None
         self._deck_game: Game | None = None  # game self.deck was resolved for
@@ -140,6 +141,7 @@ class Tracker:
         if game.resumed_from is None:
             self.deck = None
             self.secrets = SecretWatcher()
+            self.mana = []
 
     def _sides(self, game: Game) -> tuple[Player, Player] | None:
         """(opponent, us): the secrets' owner and the player whose actions might trigger them."""
@@ -157,6 +159,9 @@ class Tracker:
     def _step(self, game: Game, step: str) -> None:
         if sides := self._sides(game):
             self.secrets.step(game, step, *sides)
+        if step == "MAIN_NEXT":  # the turn is over, but it's still the same player's
+            if player := self._current_player(game):
+                self.mana.append((player.player_id, self._mana_turn(game, player)))
 
     def _game_ended(self, game: Game) -> None:
         me, opp = game.friendly, game.opponent
@@ -382,7 +387,66 @@ class Tracker:
             "first": game.player_tag(player, "FIRST_PLAYER") == "1",
             "spells": self._spells(game, player),
             "minions": self._minions(game, player),
+            "counters": self._counters(game, player),
         }
+
+    def _counters(self, game: Game, player: Player) -> dict[str, int]:
+        """Counters the game keeps but doesn't show. Most appear once they're above 0, corpses
+        for Death Knights, and the next fatigue damage once the deck is nearly empty."""
+        def tag(name: str, entity_id: int | None = None) -> int:
+            ent = game.entities.get(entity_id if entity_id is not None else player.entity_id)
+            return int(ent.tags.get(name) or 0) if ent else 0
+
+        counters = {
+            "drawn": game.drawn[player.player_id],
+            "discarded": game.discarded[player.player_id],
+            "hero_power": tag("NUM_TIMES_HERO_POWER_USED_THIS_GAME"),
+            "healed": tag("AMOUNT_HEALED_THIS_GAME"),
+            "overload": tag("OVERLOAD_THIS_GAME"),
+            "excavate": tag("CURRENT_EXCAVATE_TIER"),
+        }
+        out = {name: n for name, n in counters.items() if n}
+        if self._class(game, player) == "DEATHKNIGHT" or tag("CORPSES_SPENT_THIS_GAME"):
+            out["corpses"] = tag("CORPSES")
+        # Fatigue damage taken so far; it's counted on the player, or on older clients the hero.
+        fatigue = max(tag("FATIGUE"), tag("FATIGUE", int(game.player_tag(player, "HERO_ENTITY") or 0)))
+        if fatigue or game.count_zone(player, "DECK") <= 5:
+            out["fatigue"] = fatigue + 1
+        return out
+
+    def _current_player(self, game: Game) -> Player | None:
+        return next((p for p in game.players.values() if game.player_tag(p, "CURRENT_PLAYER") == "1"), None)
+
+    def _mana_turn(self, game: Game, player: Player) -> dict:
+        """Mana the player has spent this turn, of the crystals they had; overloaded ones don't count.
+        Spending can go above that with temporary mana such as the Coin."""
+        def tag(name: str) -> int:
+            return int(game.player_tag(player, name) or 0)
+
+        before = sum(t["spent"] for pid, t in self.mana if pid == player.player_id)
+        return {"turn": (game.turn + 1) // 2, "spent": tag("NUM_RESOURCES_SPENT_THIS_GAME") - before,
+                "available": tag("RESOURCES") - tag("OVERLOAD_LOCKED")}
+
+    def _mana_view(self, game: Game, player: Player) -> list[dict]:
+        """Mana spent per turn, including the turn in progress."""
+        turns = [{**t, "current": False} for pid, t in self.mana if pid == player.player_id]
+        if not game.complete and self._current_player(game) is player:
+            turns.append({**self._mana_turn(game, player), "current": True})
+        return turns
+
+    def _died(self, game: Game, player: Player) -> list[dict]:
+        """The player's minions that died this game, each with how often; generated ones marked.
+        Copies with different card IDs (tokens, reprints) are counted together by name."""
+        rows: dict[tuple[str, bool], dict] = {}
+        for death in game.deaths:
+            ent = game.entities.get(death.entity_id)
+            if death.player_id != player.player_id or not death.card_id or not self._visible(death.card_id):
+                continue
+            card = self._card(death.card_id)
+            row = rows.setdefault((card["name"], ent is not None and not ent.in_starting_deck),
+                                  {"card": card, "total": 0})
+            row["total"] += 1
+        return self._sorted_rows([{**row, "created": created} for (_, created), row in rows.items()])
 
     def _played_cards(self, game: Game, player: Player, card_type: str) -> list[tuple[int, dict]]:
         """(game turn, card) for each card of this type the player has played."""
@@ -520,7 +584,7 @@ class Tracker:
     def snapshot(self) -> dict:
         game = self.parser.game
         state: dict = {"session": self.session, "status": "idle", "game": None, "deck": None,
-                       "my_deck": None, "opponent": None}
+                       "my_deck": None, "me": None, "opponent": None}
 
         state["memory"] = {"enabled": self.memory_status is not None, "status": self.memory_status}
         if self.drafting and (game is None or game.complete or not is_supported(game.game_type)):
@@ -567,6 +631,12 @@ class Tracker:
         state["deck"] = self._deck_info(self.deck)
         state["my_deck"] = self._deck_rows(self.deck, drawn, extra, in_deck)
 
+        state["me"] = {
+            "played": [{"turn": t, "card": self._card(c), "created": created}
+                       for t, c, created in self._plays(game, me)],
+            "mana": self._mana_view(game, me),
+            "died": self._died(game, me),
+        }
         seen = self._opponent_seen(game, opp)
         state["opponent"] = {
             "seen": self._sorted_rows([{"card": self._card(c), "total": n} for c, n in seen.items()
@@ -575,5 +645,6 @@ class Tracker:
                        for t, c, created in self._plays(game, opp)],
             "secrets": self._secret_view(game, opp),
             "hand": self._hand_view(game, opp),
+            "died": self._died(game, opp),
         }
         return state

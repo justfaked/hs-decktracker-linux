@@ -8,7 +8,7 @@ from decktracker import deckstring
 from decktracker.history import History
 from decktracker.logfile import Session
 from decktracker.tracker import Tracker
-from tests.helpers import CARDS, SESSION, START, LogWriter, arena_game, arena_log
+from tests.helpers import CARDS, SESSION, START, LogWriter, arena_game, arena_log, before_end
 
 
 def run_session(files: dict[str, str], history: History | None = None) -> Tracker:
@@ -117,6 +117,61 @@ class TrackerTest(unittest.TestCase):
                          {"this_turn": True, "last_turn": False, "streak": 1})
         # We haven't played a minion.
         self.assertEqual(state["game"]["me"]["minions"], {"played": 0, "types": {}, "elementals": None})
+
+    def test_counters(self):
+        w = LogWriter()
+        w.tag("Me#1234", "NUM_TIMES_HERO_POWER_USED_THIS_GAME", 2)
+        w.tag("Me#1234", "AMOUNT_HEALED_THIS_GAME", 0)
+        w.tag("Me#1234", "FATIGUE", 2)
+        w.tag("Opp#999", "CORPSES", 3)
+        w.tag("Opp#999", "OVERLOAD_THIS_GAME", 4)
+        state = run_session({"Arena": arena_log(), "Power": before_end(arena_game(), w)}).snapshot()
+        # Counters at 0 are left out; our deck is nearly empty, so the next fatigue hit shows.
+        self.assertEqual(state["game"]["me"]["counters"], {"drawn": 1, "hero_power": 2, "fatigue": 3})
+        # Corpses only for Death Knights or whoever has spent some.
+        self.assertEqual(state["game"]["opp"]["counters"], {"overload": 4, "fatigue": 1})
+        w.tag("Opp#999", "CORPSES_SPENT_THIS_GAME", 1)
+        state = run_session({"Arena": arena_log(), "Power": before_end(arena_game(), w)}).snapshot()
+        self.assertEqual(state["game"]["opp"]["counters"]["corpses"], 3)
+
+    def test_mana_spent_per_turn(self):
+        w = LogWriter()
+        for player, turn, crystals, locked, spent in (("Opp#999", 3, 1, 0, 1), ("Me#1234", 4, 2, 1, 1),
+                                                     ("Opp#999", 5, 2, 0, 3), ("Me#1234", 6, 3, 0, 5)):
+            w.tag(player, "CURRENT_PLAYER", 1)
+            w.tag("GameEntity", "TURN", turn)
+            w.tag("GameEntity", "STEP", "MAIN_READY")
+            w.tag(player, "RESOURCES", crystals)
+            w.tag(player, "OVERLOAD_LOCKED", locked)
+            w.tag(player, "NUM_RESOURCES_SPENT_THIS_GAME", spent)
+            if turn < 6:  # the last turn is still going
+                w.tag("GameEntity", "STEP", "MAIN_NEXT")
+                w.tag(player, "CURRENT_PLAYER", 0)
+        state = run_session({"Arena": arena_log(), "Power": before_end(arena_game(), w, finish=False)}).snapshot()
+        # Our turns 2 and 3: 1 of 1 crystal (one was overloaded), then 4 so far of 3 (the Coin).
+        self.assertEqual(state["me"]["mana"], [{"turn": 2, "spent": 1, "available": 1, "current": False},
+                                               {"turn": 3, "spent": 4, "available": 3, "current": True}])
+
+    def test_minions_that_died(self):
+        w = LogWriter()
+        for eid, card, owner in ((30, "CARD_C", 1), (31, "CORE_CARD_C", 1), (32, "CARD_C", 2)):
+            w.entity(eid, card, ZONE="PLAY", CONTROLLER=owner, CARDTYPE="MINION")
+            w.tag(eid, "ZONE", "GRAVEYARD")
+        w.tag(8, "CARDTYPE", "MINION")
+        w.tag(8, "ZONE", "GRAVEYARD")
+        state = run_session({"Arena": arena_log(), "Power": before_end(arena_game(), w)}).snapshot()
+        # Both of our Charlies were created mid-game; the reprint counts with the original.
+        self.assertEqual([(r["card"]["name"], r["total"], r["created"]) for r in state["me"]["died"]],
+                         [("Charlie", 2, True)])
+        self.assertEqual([(r["card"]["name"], r["total"], r["created"]) for r in state["opponent"]["died"]],
+                         [("Charlie", 1, True), ("X-Ray", 1, False)])
+
+    def test_my_played_cards(self):
+        w = LogWriter()
+        w.tag(4, "ZONE", "PLAY")
+        state = run_session({"Arena": arena_log(), "Power": before_end(arena_game(), w)}).snapshot()
+        self.assertEqual([(p["turn"], p["card"]["id"], p["created"]) for p in state["me"]["played"]],
+                         [(1, "CARD_A", False)])
 
     def test_arena_copy_counts_are_learned(self):
         history = History(":memory:")

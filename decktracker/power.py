@@ -5,6 +5,7 @@ later (synchronised with animations) and would double-count.
 """
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable
@@ -85,6 +86,14 @@ class Play:
 
 
 @dataclass
+class Death:
+    turn: int
+    entity_id: int
+    player_id: int  # controller when it died
+    card_id: str  # what it was when it died, which is what comes back if it's resurrected
+
+
+@dataclass
 class Block:
     type: str  # PLAY, ATTACK, TRIGGER, DEATHS, ...
     entity_id: int | None  # the card played, the attacker, ...
@@ -104,6 +113,9 @@ class Game:
     setup: bool = True  # before mulligan finished
     friendly_id: int | None = None
     plays: list[Play] = field(default_factory=list)
+    deaths: list[Death] = field(default_factory=list)  # minions only
+    drawn: Counter = field(default_factory=Counter)  # player_id -> cards drawn after the mulligan
+    discarded: Counter = field(default_factory=Counter)  # player_id -> cards discarded
     opening_hand: dict[int, list[int]] = field(default_factory=dict)  # player_id -> entity ids after mulligan
     end: datetime | None = None
     resumed_from: "Game | None" = None
@@ -308,7 +320,14 @@ class PowerParser:
 
         if tag == "ZONE" and old == "HAND" and value in ("PLAY", "SECRET") and self._reset_depth is None:
             game.plays.append(Play(turn=game.turn, entity_id=ent.id, player_id=ent.controller))
+        elif tag == "ZONE" and old == "HAND" and value == "GRAVEYARD" and self._reset_depth is None:
+            game.discarded[ent.controller] += 1
+        elif tag == "ZONE" and old == "PLAY" and value == "GRAVEYARD" and self._reset_depth is None:
+            if ent.tags.get("CARDTYPE") == "MINION":
+                game.deaths.append(Death(game.turn, ent.id, ent.controller, ent.card_id))
         elif tag == "ZONE" and value == "HAND" and old != "HAND" and self._reset_depth is None:
+            if old == "DECK" and not game.setup:
+                game.drawn[ent.controller] += 1
             setup = ""
             if game.setup:
                 game_ent = game.entities.get(game.game_entity_id)

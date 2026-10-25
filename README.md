@@ -38,6 +38,9 @@ It reads Hearthstone's own log files and shows your remaining deck, your opponen
   Your deck is detected automatically for Arena, Underground Arena and constructed games, or you can paste a deck code.
   Above the list: what's left by card type and minion type, the total attack/health of the minions left, and the mana curve of what's left.
 - **Spells and minions this game.** For both players, the spells cast and how many of each school (Fire, Frost, Shadow, …), the minions played by type, and how many turns in a row they've played an Elemental.
+- **Game counters.** Cards drawn and discarded, hero power uses, health restored, overload, Excavate tier, corpses for Death Knights, and the next fatigue hit once a deck is nearly empty. Each appears only once it applies.
+- **What died.** For both players, every minion that died this game and how often, so you know what a resurrect can bring back.
+- **Your turns.** The cards you played each turn and how much of your mana you spent, with the total left unused.
 - **Your opponent's cards.** Every card they've played, by turn, with generated cards marked, plus everything revealed from their deck. Their hand and deck sizes are always shown.
 - **Win chance.** During a game, your win rate in earlier games like it: the same matchup and turn order, e.g. Mage vs Rogue on the coin. Until a matchup has 5 games, it falls back to the matchup in either turn order, then your class with that turn order, then all games. Only games of the same game type count, so Underground Arena and normal Arena are kept apart. All four are listed with their records.
 - **Your opponent's hand.** Each card in their hand, in order, with the turn it arrived and how: opening hand, mulligan, drawn, drawn by a card's effect, created by a card, or returned to their hand. Cards you know, such as a minion you bounced, are shown by name.
