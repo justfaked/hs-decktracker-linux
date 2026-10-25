@@ -11,12 +11,15 @@ CARDS = CardDB([
     {"id": "HERO_09", "dbfId": 813, "name": "Anduin Wrynn", "type": "HERO", "cardClass": "PRIEST"},
     {"id": "HERO_08", "dbfId": 637, "name": "Jaina Proudmoore", "type": "HERO", "cardClass": "MAGE"},
     {"id": "CARD_A", "dbfId": 1001, "name": "Alpha", "cost": 1, "type": "MINION", "rarity": "COMMON", "cardClass": "PRIEST"},
-    {"id": "CARD_B", "dbfId": 1002, "name": "Bravo", "cost": 2, "type": "SPELL", "rarity": "RARE", "cardClass": "PRIEST"},
+    {"id": "CARD_B", "dbfId": 1002, "name": "Bravo", "cost": 2, "type": "SPELL", "rarity": "RARE", "cardClass": "PRIEST",
+     "spellSchool": "HOLY"},
     {"id": "CARD_C", "dbfId": 1003, "name": "Charlie", "cost": 3, "type": "MINION", "rarity": "EPIC", "cardClass": "NEUTRAL"},
     {"id": "CARD_L", "dbfId": 1004, "name": "Lima, the Legend", "cost": 6, "type": "MINION", "rarity": "LEGENDARY", "cardClass": "PRIEST"},
     {"id": "CARD_M", "dbfId": 1005, "name": "Mike", "cost": 7, "type": "MINION", "rarity": "LEGENDARY", "cardClass": "NEUTRAL"},
     {"id": "CARD_X", "dbfId": 2001, "name": "X-Ray", "cost": 4, "type": "MINION", "rarity": "COMMON", "cardClass": "MAGE"},
     {"id": "CARD_Z", "dbfId": 2002, "name": "Zulu", "cost": 5, "type": "MINION", "rarity": "COMMON", "cardClass": "NEUTRAL"},
+    {"id": "CARD_F", "dbfId": 2003, "name": "Foxtrot", "cost": 4, "type": "SPELL", "cardClass": "MAGE", "spellSchool": "FIRE"},
+    {"id": "CARD_I", "dbfId": 2004, "name": "India", "cost": 2, "type": "SPELL", "cardClass": "MAGE", "spellSchool": "FROST"},
     {"id": "GAME_005", "dbfId": 1746, "name": "The Coin", "cost": 0, "type": "SPELL", "cardClass": "NEUTRAL"},
     *({"id": card_id, "dbfId": 3000 + i, "name": name, "cost": 3, "type": "SPELL", "rarity": "COMMON",
        "cardClass": cls, "collectible": True, "mechanics": ["SECRET"]}
@@ -83,10 +86,11 @@ def arena_log(deck_id: str = "42", cards=("CARD_A", "CARD_B", "CARD_C")) -> str:
 
 
 def arena_game(start: datetime = START + timedelta(seconds=30), my_draws=("CARD_A", "CARD_A"),
-               rewind: bool = False) -> str:
+               rewind: bool = False, opp_plays=()) -> str:
     """A short Underground Arena game: we (Me#1234, player 1) win against a Mage.
 
     Our deck: entities 4-7. Theirs: 8-11. Heroes 12 (ours) and 13 (theirs).
+    opp_plays: more cards they play after the Coin, created in hand as entities 20, 21, ...
     """
     w = LogWriter(start)
     w.power("CREATE_GAME")
@@ -128,6 +132,9 @@ def arena_game(start: datetime = START + timedelta(seconds=30), my_draws=("CARD_
     w.entity(14, "GAME_005", ZONE="HAND", CONTROLLER=2)
     w.tag(14, "ZONE", "PLAY")
     w.tag(14, "ZONE", "GRAVEYARD")
+    for eid, card in enumerate(opp_plays, 20):
+        w.entity(eid, card, ZONE="HAND", CONTROLLER=2)
+        w.tag(eid, "ZONE", "PLAY")
 
     if rewind:
         # Rewind to before our draw: entity 5 goes back to the deck, the Coin never existed.

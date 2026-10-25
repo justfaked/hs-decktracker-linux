@@ -12,6 +12,11 @@ const CLASS_NAMES = {
   WARLOCK: "Warlock", WARRIOR: "Warrior",
 };
 
+const SCHOOL_COLORS = {
+  ARCANE: "#c77dff", FEL: "#9be15d", FIRE: "#ff7a45", FROST: "#6ec6ff",
+  HOLY: "#f5d76e", NATURE: "#3fbf7f", SHADOW: "#8f7fd6",
+};
+
 const $ = (id) => document.getElementById(id);
 let state = null;
 let historyRev = -1;
@@ -71,6 +76,29 @@ function className(cls) {
   return CLASS_NAMES[cls] || "";
 }
 
+function titleCase(word) {
+  return word.charAt(0) + word.slice(1).toLowerCase();
+}
+
+function chip(label, value, { color, title } = {}) {
+  return el("span", { class: "chip", title },
+    color ? el("span", { class: "swatch", style: `background: ${color}` }) : null, label, el("b", {}, value));
+}
+
+// What a player has done this game: spells cast, per spell school.
+function renderGameStats(box, player) {
+  const spells = player?.spells;
+  box.replaceChildren();
+  if (spells?.cast) {
+    box.append(chip("Spells", spells.cast, { title: "Spells cast this game" }));
+    if (spells.schools.length) {
+      box.append(chip("Schools", spells.schools.length, { title: "Different spell schools cast this game" }));
+    }
+    for (const s of spells.schools) box.append(chip(titleCase(s.school), s.count, { color: SCHOOL_COLORS[s.school] }));
+  }
+  box.hidden = !box.childElementCount;
+}
+
 // --- live view --------------------------------------------------------------
 
 function renderStatus(s) {
@@ -125,6 +153,8 @@ function renderDeck(s) {
       ? `${deck.size} cards · next game will use this deck`
       : "Queue up a game, or paste a deck code below.";
   }
+
+  renderGameStats($("my-game"), inGame ? s.game.me : null);
 
   if (!rows.length) {
     list.append(el("li", { class: "empty" }, inGame ? "No cards drawn yet." : "No deck detected yet."));
@@ -232,6 +262,7 @@ function renderOpponent(s) {
   renderOdds(s.odds);
   renderSecrets(s.opponent?.secrets || []);
   renderHand(s.opponent?.hand || [], s.opponent ? "Empty hand." : "—");
+  renderGameStats($("opp-game"), s.opponent ? opp : null);
   if (!opp || !s.opponent) {
     $("opp-name").textContent = "Opponent";
     $("opp-sub").textContent = "No game in progress";

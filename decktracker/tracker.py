@@ -350,7 +350,18 @@ class Tracker:
             "deck": game.count_zone(player, "DECK"),
             "result": game.result(player),
             "first": game.player_tag(player, "FIRST_PLAYER") == "1",
+            "spells": self._spells(game, player),
         }
+
+    def _spells(self, game: Game, player: Player) -> dict:
+        """Spells the player has cast this game, per spell school, most cast first."""
+        played = [card for _, card_id, _ in self._plays(game, player)
+                  if (card := self.cards.get(card_id)) and card.get("type") == "SPELL"]
+        schools = Counter(card["spellSchool"] for card in played if card.get("spellSchool"))
+        # The game's own count also includes spells cast by card effects.
+        counted = game.player_tag(player, "NUM_SPELLS_PLAYED_THIS_GAME")
+        return {"cast": max(int(counted or 0), len(played)),
+                "schools": [{"school": school, "count": n} for school, n in schools.most_common()]}
 
     def _rating(self, cls: str | None, card_id: str) -> dict | None:
         rating = self.ratings.get(cls, card_id)

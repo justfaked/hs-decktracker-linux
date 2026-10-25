@@ -36,6 +36,7 @@ It reads Hearthstone's own log files and shows your remaining deck, your opponen
 
 - **Your deck, live.** Cards are crossed off as you draw them, with copies left and the chance to draw each one next.
   Your deck is detected automatically for Arena, Underground Arena and constructed games, or you can paste a deck code.
+- **Spells and spell schools.** For both players, the spells cast this game and how many of each school (Fire, Frost, Shadow, …).
 - **Your opponent's cards.** Every card they've played, by turn, with generated cards marked, plus everything revealed from their deck. Their hand and deck sizes are always shown.
 - **Win chance.** During a game, your win rate in earlier games like it: the same matchup and turn order, e.g. Mage vs Rogue on the coin. Until a matchup has 5 games, it falls back to the matchup in either turn order, then your class with that turn order, then all games. Only games of the same game type count, so Underground Arena and normal Arena are kept apart. All four are listed with their records.
 - **Your opponent's hand.** Each card in their hand, in order, with the turn it arrived and how: opening hand, mulligan, drawn, drawn by a card's effect, created by a card, or returned to their hand. Cards you know, such as a minion you bounced, are shown by name.
